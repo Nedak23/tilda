@@ -7,33 +7,37 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Things-inspired color palette
+        // Things dark mode color palette
         accent: {
-          DEFAULT: '#007AFF',
-          hover: '#0056CC',
+          DEFAULT: '#FFD60A', // Yellow star color
+          blue: '#5BA4F5',
+          hover: '#E6C009',
         },
         surface: {
-          DEFAULT: '#FFFFFF',
-          secondary: '#F5F5F7',
-          tertiary: '#E8E8ED',
+          DEFAULT: '#1C1C1E', // Main background
+          secondary: '#2C2C2E', // Sidebar/cards
+          tertiary: '#3A3A3C', // Hover states
+          elevated: '#3A3A3C', // Elevated cards
         },
         text: {
-          DEFAULT: '#1D1D1F',
-          secondary: '#86868B',
-          tertiary: '#AEAEB2',
+          DEFAULT: '#FFFFFF',
+          secondary: '#98989D',
+          tertiary: '#636366',
+          placeholder: '#636366',
         },
         border: {
-          DEFAULT: '#D2D2D7',
-          light: '#E5E5EA',
+          DEFAULT: '#3A3A3C',
+          light: '#2C2C2E',
         },
-        success: '#34C759',
-        warning: '#FF9500',
-        error: '#FF3B30',
+        success: '#32D74B',
+        warning: '#FF9F0A',
+        error: '#FF453A',
       },
       fontFamily: {
         sans: [
           '-apple-system',
           'BlinkMacSystemFont',
+          'SF Pro Text',
           'Segoe UI',
           'Roboto',
           'Helvetica Neue',
@@ -45,9 +49,10 @@ export default {
         '2xs': '0.625rem',
       },
       boxShadow: {
-        'subtle': '0 1px 3px rgba(0, 0, 0, 0.08)',
-        'elevated': '0 4px 12px rgba(0, 0, 0, 0.1)',
-        'modal': '0 8px 32px rgba(0, 0, 0, 0.15)',
+        'subtle': '0 1px 3px rgba(0, 0, 0, 0.3)',
+        'elevated': '0 4px 12px rgba(0, 0, 0, 0.4)',
+        'modal': '0 8px 32px rgba(0, 0, 0, 0.5)',
+        'card': '0 2px 8px rgba(0, 0, 0, 0.3)',
       },
       animation: {
         'fade-in': 'fadeIn 150ms ease-out',

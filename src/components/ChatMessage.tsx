@@ -17,8 +17,8 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
         className={`
           max-w-[80%] px-4 py-2.5 rounded-2xl
           ${isUser
-            ? 'bg-accent text-white rounded-br-md'
-            : 'bg-surface-secondary text-text rounded-bl-md'
+            ? 'bg-accent-blue text-white rounded-br-md'
+            : 'bg-surface-tertiary text-text rounded-bl-md'
           }
         `}
       >

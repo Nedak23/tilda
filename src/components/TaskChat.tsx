@@ -65,7 +65,6 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
     if (!files?.length) return
 
     for (const file of files) {
-      // Only allow text/markdown files
       if (!file.type.match(/^text\//) && !file.name.match(/\.(txt|md|markdown)$/i)) {
         console.warn(`Skipping unsupported file: ${file.name}`)
         continue
@@ -73,7 +72,6 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
       await addAttachment(task.id, file)
     }
 
-    // Reset input
     e.target.value = ''
   }
 
@@ -94,16 +92,19 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-surface">
       {/* Header */}
       <div className="flex-shrink-0 border-b border-border-light">
-        <div className="flex items-center justify-between px-4 py-3">
+        {/* Titlebar drag area */}
+        <div className="h-12 titlebar-drag" />
+
+        <div className="flex items-center justify-between px-4 pb-3">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-text-secondary hover:text-text transition-colors"
+            className="flex items-center gap-1.5 text-text-secondary hover:text-text transition-colors titlebar-no-drag"
           >
             <svg
-              className="w-5 h-5"
+              className="w-4 h-4"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -121,10 +122,10 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
           <button
             onClick={handleTaskAction}
             className={`
-              px-3 py-1.5 text-sm font-medium rounded-lg transition-colors
+              px-3 py-1.5 text-sm font-medium rounded-lg transition-colors titlebar-no-drag
               ${task.status === 'archived'
-                ? 'bg-surface-secondary text-text hover:bg-surface-tertiary'
-                : 'bg-success text-white hover:bg-success/90'
+                ? 'bg-surface-tertiary text-text hover:bg-surface-elevated'
+                : 'bg-success/20 text-success hover:bg-success/30'
               }
             `}
           >
@@ -133,7 +134,7 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
         </div>
 
         {/* Task Info */}
-        <div className="px-4 pb-3">
+        <div className="px-4 pb-4">
           {isEditingName ? (
             <input
               type="text"
@@ -141,19 +142,19 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
               onChange={e => setEditedName(e.target.value)}
               onBlur={handleNameSave}
               onKeyDown={handleNameKeyDown}
-              className="text-lg font-semibold text-text bg-transparent border-b-2 border-accent focus:outline-none w-full"
+              className="text-lg font-semibold text-text bg-transparent border-b border-accent-blue focus:outline-none w-full"
               autoFocus
             />
           ) : (
             <h2
               onClick={() => setIsEditingName(true)}
-              className="text-lg font-semibold text-text cursor-pointer hover:text-accent transition-colors"
+              className="text-lg font-semibold text-text cursor-pointer hover:text-accent-blue transition-colors"
             >
               {task.name}
             </h2>
           )}
           {task.deadline && (
-            <p className="text-sm text-text-secondary mt-0.5">
+            <p className="text-sm text-text-secondary mt-1">
               Due {format(new Date(task.deadline), 'MMMM d, yyyy')}
             </p>
           )}
@@ -171,7 +172,7 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
               {attachments.map(attachment => (
                 <div
                   key={attachment.id}
-                  className="flex items-center gap-2 px-2 py-1 bg-surface-secondary rounded text-xs text-text-secondary"
+                  className="flex items-center gap-2 px-2 py-1 bg-surface-tertiary rounded text-xs text-text-secondary"
                 >
                   <span className="truncate max-w-[150px]">{attachment.filename}</span>
                   <button
@@ -192,7 +193,7 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-text-tertiary">
-            <p className="text-center">
+            <p className="text-center text-sm">
               Start a conversation to work on this task
             </p>
           </div>
@@ -216,8 +217,8 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
 
         {isPending && messages[messages.length - 1]?.sender === 'user' && (
           <div className="flex justify-start">
-            <div className="bg-surface-secondary px-4 py-2.5 rounded-2xl rounded-bl-md">
-              <div className="flex items-center gap-1">
+            <div className="bg-surface-tertiary px-4 py-2.5 rounded-2xl rounded-bl-md">
+              <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 bg-text-tertiary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                 <span className="w-2 h-2 bg-text-tertiary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                 <span className="w-2 h-2 bg-text-tertiary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
@@ -231,11 +232,11 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
 
       {/* Input */}
       <div className="flex-shrink-0 border-t border-border-light p-4">
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-3">
           {/* Attach button */}
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="p-2 text-text-secondary hover:text-text hover:bg-surface-secondary rounded-lg transition-colors"
+            className="p-2 text-text-tertiary hover:text-text-secondary rounded-lg transition-colors"
             title="Attach file"
           >
             <svg
@@ -247,7 +248,7 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth={2}
+                strokeWidth={1.5}
                 d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
               />
             </svg>
@@ -262,14 +263,14 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
           />
 
           {/* Message input */}
-          <div className="flex-1 relative">
+          <div className="flex-1">
             <textarea
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Type a message..."
               rows={1}
-              className="w-full px-4 py-2.5 border border-border rounded-xl text-sm resize-none focus:ring-2 focus:ring-accent focus:border-transparent max-h-32"
+              className="w-full px-4 py-2.5 bg-surface-tertiary rounded-xl text-sm text-text placeholder-text-tertiary resize-none focus:outline-none focus:ring-1 focus:ring-accent-blue max-h-32"
               style={{
                 minHeight: '42px',
                 height: Math.min(input.split('\n').length * 24 + 18, 128) + 'px'
@@ -281,7 +282,7 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
           <button
             onClick={handleSend}
             disabled={!input.trim() || isPending}
-            className="p-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-2 bg-accent-blue text-white rounded-lg hover:bg-accent-blue/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg
               className="w-5 h-5"

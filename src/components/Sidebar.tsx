@@ -1,10 +1,10 @@
 import { useTaskStore } from '../stores/taskStore'
 import type { ViewType } from '../types'
 
-const navItems: { id: ViewType; label: string; icon: string }[] = [
-  { id: 'today', label: 'Today', icon: '☀️' },
+const navItems: { id: ViewType; label: string; icon: string; color?: string }[] = [
+  { id: 'today', label: 'Today', icon: '★', color: 'text-accent' },
   { id: 'upcoming', label: 'Upcoming', icon: '📅' },
-  { id: 'archive', label: 'Archive', icon: '📁' }
+  { id: 'archive', label: 'Logbook', icon: '✓', color: 'text-success' }
 ]
 
 export function Sidebar() {
@@ -20,13 +20,13 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-56 bg-surface-secondary border-r border-border-light flex flex-col h-full">
+    <aside className="w-52 bg-surface-secondary flex flex-col h-full border-r border-border-light">
       {/* Titlebar drag area */}
       <div className="h-12 titlebar-drag" />
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-2">
-        <ul className="space-y-1">
+      <nav className="flex-1 px-2 py-1">
+        <ul className="space-y-0.5">
           {navItems.map(item => {
             const count = getCounts(item.id)
             const isActive = currentView === item.id
@@ -36,23 +36,18 @@ export function Sidebar() {
                 <button
                   onClick={() => setCurrentView(item.id)}
                   className={`
-                    w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left
+                    w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left
                     transition-colors duration-100 titlebar-no-drag
                     ${isActive
-                      ? 'bg-accent/10 text-accent font-medium'
-                      : 'text-text hover:bg-surface-tertiary'
+                      ? 'bg-surface-tertiary text-text'
+                      : 'text-text-secondary hover:bg-surface-tertiary/50 hover:text-text'
                     }
                   `}
                 >
-                  <span className="text-base">{item.icon}</span>
-                  <span className="flex-1 text-sm">{item.label}</span>
+                  <span className={`text-sm ${item.color || ''}`}>{item.icon}</span>
+                  <span className="flex-1 text-sm font-medium">{item.label}</span>
                   {count !== undefined && (
-                    <span
-                      className={`
-                        text-xs px-1.5 py-0.5 rounded-full min-w-[20px] text-center
-                        ${isActive ? 'bg-accent/20 text-accent' : 'bg-surface-tertiary text-text-secondary'}
-                      `}
-                    >
+                    <span className="text-xs text-text-secondary">
                       {count}
                     </span>
                   )}
@@ -62,11 +57,6 @@ export function Sidebar() {
           })}
         </ul>
       </nav>
-
-      {/* App info */}
-      <div className="px-4 py-3 border-t border-border-light">
-        <p className="text-2xs text-text-tertiary">Tilda v0.1.0</p>
-      </div>
     </aside>
   )
 }

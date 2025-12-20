@@ -9,16 +9,19 @@ import {
   DragEndEvent
 } from '@dnd-kit/core'
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
-import { format, isToday, isTomorrow, parseISO } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { useTaskStore } from '../stores/taskStore'
 import { TaskItem } from './TaskItem'
 import { SortableTaskItem } from './SortableTaskItem'
 import type { Task } from '../types'
+
+interface TaskListProps {
+  onCreateTask?: () => void
+}
 
 interface DateGroup {
   date: string
@@ -28,8 +31,6 @@ interface DateGroup {
 
 function formatDateLabel(dateStr: string): string {
   const date = parseISO(dateStr)
-  if (isToday(date)) return 'Today'
-  if (isTomorrow(date)) return 'Tomorrow'
   return format(date, 'EEEE, MMM d')
 }
 
@@ -53,7 +54,7 @@ function groupTasksByDate(tasks: Task[], dateField: 'dateToWorkOn' | 'completion
     }))
 }
 
-export function TaskList() {
+export function TaskList({ onCreateTask }: TaskListProps) {
   const {
     currentView,
     activeTaskId,
@@ -112,10 +113,17 @@ export function TaskList() {
   if (currentView === 'today') {
     if (todayTasks.length === 0) {
       return (
-        <div className="flex-1 flex items-center justify-center text-text-tertiary">
+        <div className="flex-1 flex items-center justify-center text-text-tertiary px-4">
           <div className="text-center">
-            <p className="text-lg mb-1">No tasks for today</p>
-            <p className="text-sm">Create a new task to get started</p>
+            <p className="text-sm">No tasks for today</p>
+            {onCreateTask && (
+              <button
+                onClick={onCreateTask}
+                className="mt-2 text-sm text-accent-blue hover:underline"
+              >
+                Create a task
+              </button>
+            )}
           </div>
         </div>
       )
@@ -131,7 +139,7 @@ export function TaskList() {
           items={todayTasks.map(t => t.id)}
           strategy={verticalListSortingStrategy}
         >
-          <div className="divide-y divide-border-light">
+          <div>
             {todayTasks.map(task => (
               <SortableTaskItem
                 key={task.id}
@@ -151,23 +159,30 @@ export function TaskList() {
   if (currentView === 'upcoming') {
     if (upcomingGroups.length === 0) {
       return (
-        <div className="flex-1 flex items-center justify-center text-text-tertiary">
+        <div className="flex-1 flex items-center justify-center text-text-tertiary px-4">
           <div className="text-center">
-            <p className="text-lg mb-1">No upcoming tasks</p>
-            <p className="text-sm">Tasks scheduled for future dates will appear here</p>
+            <p className="text-sm">No upcoming tasks</p>
+            {onCreateTask && (
+              <button
+                onClick={onCreateTask}
+                className="mt-2 text-sm text-accent-blue hover:underline"
+              >
+                Schedule a task
+              </button>
+            )}
           </div>
         </div>
       )
     }
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         {upcomingGroups.map(group => (
           <div key={group.date}>
-            <h3 className="text-xs font-medium text-text-secondary uppercase tracking-wide px-4 mb-2">
+            <h3 className="text-xs font-medium text-text-secondary px-4 mb-1">
               {group.label}
             </h3>
-            <div className="divide-y divide-border-light">
+            <div>
               {group.tasks.map(task => (
                 <TaskItem
                   key={task.id}
@@ -187,23 +202,22 @@ export function TaskList() {
   // Archive View - grouped by completion date
   if (archiveGroups.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-text-tertiary">
+      <div className="flex-1 flex items-center justify-center text-text-tertiary px-4">
         <div className="text-center">
-          <p className="text-lg mb-1">No completed tasks</p>
-          <p className="text-sm">Completed tasks will appear here</p>
+          <p className="text-sm">No completed tasks yet</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {archiveGroups.map(group => (
         <div key={group.date}>
-          <h3 className="text-xs font-medium text-text-secondary uppercase tracking-wide px-4 mb-2">
+          <h3 className="text-xs font-medium text-text-secondary px-4 mb-1">
             {group.label}
           </h3>
-          <div className="divide-y divide-border-light">
+          <div>
             {group.tasks.map(task => (
               <TaskItem
                 key={task.id}

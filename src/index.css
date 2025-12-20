@@ -2,10 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbar styling */
+/* Dark scrollbar styling */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -13,21 +13,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #D2D2D7;
-  border-radius: 4px;
+  background: #3A3A3C;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #AEAEB2;
-}
-
-/* Hide scrollbar when not hovering */
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-
-.scrollbar-hide:hover::-webkit-scrollbar {
-  display: block;
+  background: #48484A;
 }
 
 /* Drag handle for titlebar */
@@ -41,7 +32,7 @@
 
 /* Smooth focus outline */
 *:focus-visible {
-  outline: 2px solid #007AFF;
+  outline: 2px solid #5BA4F5;
   outline-offset: 2px;
 }
 
@@ -51,20 +42,20 @@ button:focus {
 }
 
 button:focus-visible {
-  outline: 2px solid #007AFF;
+  outline: 2px solid #5BA4F5;
   outline-offset: 2px;
 }
 
-/* Checkbox circle styling */
-.checkbox-circle {
-  @apply w-5 h-5 rounded-full border-2 border-border flex items-center justify-center cursor-pointer transition-all duration-150;
+/* Checkbox styling - Things style rounded square */
+.checkbox {
+  @apply w-4 h-4 rounded border-2 border-text-tertiary flex items-center justify-center cursor-pointer transition-all duration-150 flex-shrink-0;
 }
 
-.checkbox-circle:hover {
-  @apply border-accent bg-accent/5;
+.checkbox:hover {
+  @apply border-text-secondary;
 }
 
-.checkbox-circle.checked {
+.checkbox.checked {
   @apply bg-success border-success;
 }
 
@@ -74,23 +65,39 @@ button:focus-visible {
 }
 
 .task-item:hover {
-  @apply bg-surface-secondary;
+  @apply bg-surface-tertiary/50;
 }
 
 /* Modal backdrop */
 .modal-backdrop {
-  @apply fixed inset-0 bg-black/30 backdrop-blur-sm;
+  @apply fixed inset-0 bg-black/50 backdrop-blur-sm;
 }
 
-/* Date picker input styling */
-input[type="date"] {
-  @apply appearance-none;
+/* Input styling for dark mode */
+input[type="text"],
+input[type="date"],
+textarea {
+  @apply bg-surface-tertiary border-none text-text placeholder-text-placeholder;
 }
 
+input[type="text"]:focus,
+input[type="date"]:focus,
+textarea:focus {
+  @apply ring-1 ring-accent-blue outline-none;
+}
+
+/* Date picker styling */
 input[type="date"]::-webkit-calendar-picker-indicator {
-  @apply opacity-50 cursor-pointer;
+  filter: invert(1);
+  opacity: 0.5;
+  cursor: pointer;
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator:hover {
-  @apply opacity-100;
+  opacity: 0.8;
+}
+
+/* Selection color */
+::selection {
+  background: rgba(91, 164, 245, 0.3);
 }
