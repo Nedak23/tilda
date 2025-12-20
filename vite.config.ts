@@ -20,18 +20,13 @@ export default defineConfig({
         }
       },
       {
-        entry: 'electron/preload.cts',
+        entry: 'electron/preload.ts',
         onstart(options) {
           options.reload()
         },
         vite: {
           build: {
-            outDir: 'dist-electron',
-            rollupOptions: {
-              output: {
-                entryFileNames: 'preload.js'
-              }
-            }
+            outDir: 'dist-electron'
           }
         }
       }
