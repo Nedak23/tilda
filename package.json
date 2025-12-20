@@ -1,7 +1,6 @@
 {
   "name": "tilda",
   "version": "0.1.0",
-  "type": "module",
   "description": "A to-do list app where each task is an AI conversation",
   "main": "dist-electron/main.js",
   "scripts": {
