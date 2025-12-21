@@ -1,17 +1,24 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { getTaskById, getMessagesByTask, getAttachmentsByTask, createMessage, setUnreadAgentMessage } from './database'
+import { getApiKey, getModel } from './settings'
 import type { Message, Attachment } from '../src/types'
 
 let anthropic: Anthropic | null = null
+let currentApiKey: string | null = null
 
 function getClient(): Anthropic {
-  if (!anthropic) {
-    const apiKey = process.env.ANTHROPIC_API_KEY
-    if (!apiKey) {
-      throw new Error('ANTHROPIC_API_KEY environment variable is not set')
-    }
-    anthropic = new Anthropic({ apiKey })
+  const apiKey = getApiKey()
+  if (!apiKey) {
+    throw new Error('Please configure your API key in Settings')
   }
+
+  // Recreate client if API key changed
+  if (anthropic && currentApiKey === apiKey) {
+    return anthropic
+  }
+
+  currentApiKey = apiKey
+  anthropic = new Anthropic({ apiKey })
   return anthropic
 }
 
@@ -92,8 +99,9 @@ export async function sendMessage(
 
     let fullResponse = ''
 
+    const model = getModel()
     const stream = await client.messages.stream({
-      model: 'claude-sonnet-4-20250514',
+      model,
       max_tokens: 4096,
       system: systemPrompt,
       messages

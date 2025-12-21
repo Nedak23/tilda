@@ -24,6 +24,7 @@ import {
   setUnreadAgentMessage
 } from './database'
 import { sendMessage, cancelRequest } from './llm'
+import { getSettings, saveSettings, type Settings } from './settings'
 import type { CreateTaskInput, UpdateTaskInput, MessageSender } from '../src/types'
 
 let mainWindow: BrowserWindow | null = null
@@ -147,6 +148,15 @@ ipcMain.on('llm:cancel', (_event, taskId: string) => {
 // Track active task from renderer
 ipcMain.on('task:setActive', (_event, taskId: string | null) => {
   activeTaskId = taskId
+})
+
+// IPC Handlers for Settings
+ipcMain.handle('settings:get', () => {
+  return getSettings()
+})
+
+ipcMain.handle('settings:save', (_event, settings: Settings) => {
+  saveSettings(settings)
 })
 
 // App lifecycle
