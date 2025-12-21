@@ -275,7 +275,24 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         await get().loadTasks()
       }
     } catch (error) {
-      set({ error: (error as Error).message })
+      const errorMessage = (error as Error).message
+      set({ error: errorMessage })
+
+      // Show error as a message in the chat
+      const errorDisplayMessage: Message = {
+        id: crypto.randomUUID(),
+        taskId,
+        sender: 'agent',
+        content: `Error: ${errorMessage}`,
+        timestamp: new Date().toISOString()
+      }
+
+      set(state => ({
+        messagesByTask: {
+          ...state.messagesByTask,
+          [taskId]: [...(state.messagesByTask[taskId] || []), errorDisplayMessage]
+        }
+      }))
     } finally {
       // Remove from pending
       const updatedPending = new Set(get().pendingResponses)

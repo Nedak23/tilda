@@ -1,6 +1,12 @@
 export type TaskStatus = 'upcoming' | 'today' | 'archived'
 export type MessageSender = 'user' | 'agent'
 export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly'
+export type ModelType = 'claude-sonnet-4-5-20250929' | 'claude-haiku-4-5-20251001' | 'claude-opus-4-5-20251101'
+
+export interface Settings {
+  apiKey: string
+  model: ModelType
+}
 
 export interface RecurrenceRule {
   frequency: RecurrenceFrequency
@@ -91,11 +97,17 @@ export interface LLMAPI {
   cancelRequest: (taskId: string) => void
 }
 
+export interface SettingsAPI {
+  get: () => Promise<Settings>
+  save: (settings: Settings) => Promise<void>
+}
+
 export interface ElectronAPI {
   tasks: TasksAPI
   messages: MessagesAPI
   attachments: AttachmentsAPI
   llm: LLMAPI
+  settings: SettingsAPI
 }
 
 declare global {

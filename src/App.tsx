@@ -5,6 +5,7 @@ import { TaskList } from './components/TaskList'
 import { TaskChat } from './components/TaskChat'
 import { TaskModal } from './components/TaskModal'
 import { InlineTaskCreate } from './components/InlineTaskCreate'
+import { SettingsModal } from './components/SettingsModal'
 
 function App() {
   const {
@@ -19,6 +20,7 @@ function App() {
   } = useTaskStore()
 
   const [isCreatingTask, setIsCreatingTask] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
   useEffect(() => {
     loadTasks()
@@ -86,7 +88,7 @@ function App() {
   return (
     <div className="h-screen flex bg-surface overflow-hidden">
       {/* Sidebar */}
-      <Sidebar />
+      <Sidebar onOpenSettings={() => setIsSettingsOpen(true)} />
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0">
@@ -174,6 +176,11 @@ function App() {
           onClose={() => setExaminingTask(null)}
           onExpandChat={() => setActiveTask(examiningTask.id)}
         />
+      )}
+
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <SettingsModal onClose={() => setIsSettingsOpen(false)} />
       )}
     </div>
   )

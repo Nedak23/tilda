@@ -3,7 +3,8 @@ import type {
   CreateTaskInput,
   UpdateTaskInput,
   MessageSender,
-  ElectronAPI
+  ElectronAPI,
+  Settings
 } from '../src/types'
 
 const api: ElectronAPI = {
@@ -44,6 +45,10 @@ const api: ElectronAPI = {
       })
     },
     cancelRequest: (taskId: string) => ipcRenderer.send('llm:cancel', taskId)
+  },
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    save: (settings: Settings) => ipcRenderer.invoke('settings:save', settings)
   }
 }
 
