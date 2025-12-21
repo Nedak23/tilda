@@ -12,9 +12,11 @@ export function InlineTaskCreate({ onClose, defaultDate }: InlineTaskCreateProps
   const today = format(new Date(), 'yyyy-MM-dd')
 
   const [name, setName] = useState('')
-  const [notes, setNotes] = useState('')
-  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [description, setDescription] = useState('')
   const [dateToWorkOn, setDateToWorkOn] = useState(defaultDate || today)
+  const [deadline, setDeadline] = useState('')
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [showDeadlinePicker, setShowDeadlinePicker] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -24,15 +26,14 @@ export function InlineTaskCreate({ onClose, defaultDate }: InlineTaskCreateProps
     inputRef.current?.focus()
   }, [])
 
-  // Handle click outside to save and close
+  // Handle click outside to close (without saving)
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        handleSaveAndClose()
+        onClose()
       }
     }
 
-    // Delay adding listener to prevent immediate trigger
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside)
     }, 100)
@@ -41,34 +42,44 @@ export function InlineTaskCreate({ onClose, defaultDate }: InlineTaskCreateProps
       clearTimeout(timer)
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [name, notes, dateToWorkOn])
+  }, [onClose])
 
-  const handleSaveAndClose = async () => {
-    if (name.trim() && !isSubmitting) {
-      setIsSubmitting(true)
-      try {
-        await createTask({
-          name: name.trim(),
-          dateToWorkOn,
-          description: notes.trim() || undefined
-        })
-      } catch (error) {
-        console.error('Failed to create task:', error)
-      } finally {
-        setIsSubmitting(false)
-      }
+  const handleSubmit = async () => {
+    if (!name.trim() || isSubmitting) return
+
+    setIsSubmitting(true)
+    try {
+      await createTask({
+        name: name.trim(),
+        dateToWorkOn,
+        deadline: deadline || undefined,
+        description: description.trim() || undefined
+      })
+      onClose()
+    } catch (error) {
+      console.error('Failed to create task:', error)
+    } finally {
+      setIsSubmitting(false)
     }
-    onClose()
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      handleSaveAndClose()
+      handleSubmit()
     }
     if (e.key === 'Escape') {
       onClose()
     }
+  }
+
+  const clearDate = () => {
+    setDateToWorkOn(today)
+  }
+
+  const clearDeadline = () => {
+    setDeadline('')
+    setShowDeadlinePicker(false)
   }
 
   const isToday = dateToWorkOn === today
@@ -76,80 +87,166 @@ export function InlineTaskCreate({ onClose, defaultDate }: InlineTaskCreateProps
   return (
     <div
       ref={containerRef}
-      className="mx-4 my-2 bg-surface-tertiary rounded-xl p-4 shadow-card animate-fade-in"
+      className="mx-4 mb-2 p-4 rounded-lg border border-border bg-surface-secondary max-w-sm animate-fade-in"
     >
-      {/* Task name input */}
-      <div className="flex items-start gap-3">
-        <div className="checkbox mt-0.5" />
-        <div className="flex-1">
-          <input
-            ref={inputRef}
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="New To-Do"
-            className="w-full bg-transparent text-text text-sm placeholder-text-tertiary focus:outline-none"
-          />
-          <input
-            type="text"
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Notes"
-            className="w-full bg-transparent text-text-secondary text-sm placeholder-text-tertiary focus:outline-none mt-1"
-          />
-        </div>
-      </div>
+      {/* Task name */}
+      <input
+        ref={inputRef}
+        type="text"
+        value={name}
+        onChange={e => setName(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Task name"
+        className="w-full bg-transparent text-text text-sm placeholder-text-tertiary focus:outline-none"
+      />
 
-      {/* Bottom toolbar */}
-      <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
-        {/* Date selector */}
+      {/* Description */}
+      <input
+        type="text"
+        value={description}
+        onChange={e => setDescription(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Description"
+        className="w-full bg-transparent text-text-secondary text-sm placeholder-text-tertiary focus:outline-none mt-2"
+      />
+
+      {/* Action buttons row */}
+      <div className="flex items-center gap-2 mt-4">
+        {/* Date button */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              setShowDatePicker(!showDatePicker)
+              setShowDeadlinePicker(false)
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm border transition-colors ${
+              isToday
+                ? 'border-success/50 text-success'
+                : 'border-border-light text-text-secondary hover:text-text hover:border-border'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span>{isToday ? 'Today' : format(new Date(dateToWorkOn), 'MMM d')}</span>
+            {!isToday && (
+              <button
+                onClick={e => {
+                  e.stopPropagation()
+                  clearDate()
+                }}
+                className="ml-0.5 hover:text-text"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </button>
+          {showDatePicker && (
+            <div className="absolute top-full left-0 mt-1 bg-surface-elevated rounded-lg shadow-elevated p-2 z-10">
+              <input
+                type="date"
+                value={dateToWorkOn}
+                onChange={e => {
+                  setDateToWorkOn(e.target.value)
+                  setShowDatePicker(false)
+                }}
+                className="bg-surface-tertiary rounded px-2 py-1 text-sm"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Deadline button */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              setShowDeadlinePicker(!showDeadlinePicker)
+              setShowDatePicker(false)
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm border transition-colors ${
+              deadline
+                ? 'border-warning/50 text-warning'
+                : 'border-border-light text-text-tertiary hover:text-text-secondary hover:border-border'
+            }`}
+            title="Set deadline"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {deadline && (
+              <>
+                <span>{format(new Date(deadline), 'MMM d')}</span>
+                <button
+                  onClick={e => {
+                    e.stopPropagation()
+                    clearDeadline()
+                  }}
+                  className="ml-0.5 hover:text-text"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </>
+            )}
+          </button>
+          {showDeadlinePicker && (
+            <div className="absolute top-full left-0 mt-1 bg-surface-elevated rounded-lg shadow-elevated p-2 z-10">
+              <input
+                type="date"
+                value={deadline}
+                onChange={e => {
+                  setDeadline(e.target.value)
+                  setShowDeadlinePicker(false)
+                }}
+                className="bg-surface-tertiary rounded px-2 py-1 text-sm"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* More options placeholder */}
         <button
-          onClick={() => setShowDatePicker(!showDatePicker)}
-          className="flex items-center gap-1.5 text-sm text-accent hover:text-accent-hover transition-colors"
+          type="button"
+          className="p-1.5 rounded-md border border-border-light text-text-tertiary hover:text-text-secondary hover:border-border transition-colors"
+          title="More options"
         >
-          <span>★</span>
-          <span>{isToday ? 'Today' : format(new Date(dateToWorkOn), 'MMM d')}</span>
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+            <circle cx="6" cy="12" r="1.5" />
+            <circle cx="12" cy="12" r="1.5" />
+            <circle cx="18" cy="12" r="1.5" />
+          </svg>
         </button>
 
-        {showDatePicker && (
-          <div className="absolute mt-1 bg-surface-elevated rounded-lg shadow-elevated p-2 z-10">
-            <input
-              type="date"
-              value={dateToWorkOn}
-              onChange={e => {
-                setDateToWorkOn(e.target.value)
-                setShowDatePicker(false)
-              }}
-              className="bg-surface-tertiary rounded px-2 py-1 text-sm"
-            />
-          </div>
-        )}
+        {/* Spacer */}
+        <div className="flex-1" />
 
-        {/* Action buttons - icons only like Things */}
-        <div className="flex items-center gap-2">
-          {/* Tags icon placeholder */}
-          <button className="p-1.5 text-text-tertiary hover:text-text-secondary transition-colors" title="Tags">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
-            </svg>
-          </button>
+        {/* Cancel button */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="p-2 rounded-lg border border-border-light text-text-secondary hover:text-text hover:border-border transition-colors"
+          title="Cancel"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
 
-          {/* Checklist icon placeholder */}
-          <button className="p-1.5 text-text-tertiary hover:text-text-secondary transition-colors" title="Checklist">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-            </svg>
-          </button>
-
-          {/* Deadline icon */}
-          <button className="p-1.5 text-text-tertiary hover:text-text-secondary transition-colors" title="Deadline">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
-            </svg>
-          </button>
-        </div>
+        {/* Submit button - blue */}
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={!name.trim() || isSubmitting}
+          className="p-2 rounded-lg bg-accent-blue text-white hover:bg-accent-blue/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Add task"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+          </svg>
+        </button>
       </div>
     </div>
   )

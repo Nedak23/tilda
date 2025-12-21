@@ -57,7 +57,8 @@ function groupTasksByDate(tasks: Task[], dateField: 'dateToWorkOn' | 'completion
 export function TaskList({ onCreateTask }: TaskListProps) {
   const {
     currentView,
-    activeTaskId,
+    examiningTaskId,
+    setExaminingTask,
     setActiveTask,
     getTodayTasks,
     getUpcomingTasks,
@@ -144,9 +145,10 @@ export function TaskList({ onCreateTask }: TaskListProps) {
               <SortableTaskItem
                 key={task.id}
                 task={task}
-                onSelect={() => setActiveTask(task.id)}
+                onSelect={() => setExaminingTask(task.id)}
                 onComplete={() => handleTaskAction(task)}
-                isSelected={activeTaskId === task.id}
+                onOpenChat={() => setActiveTask(task.id)}
+                isSelected={examiningTaskId === task.id}
               />
             ))}
           </div>
@@ -187,9 +189,10 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                 <TaskItem
                   key={task.id}
                   task={task}
-                  onSelect={() => setActiveTask(task.id)}
+                  onSelect={() => setExaminingTask(task.id)}
                   onComplete={() => handleTaskAction(task)}
-                  isSelected={activeTaskId === task.id}
+                  onOpenChat={() => setActiveTask(task.id)}
+                  isSelected={examiningTaskId === task.id}
                 />
               ))}
             </div>
@@ -222,9 +225,10 @@ export function TaskList({ onCreateTask }: TaskListProps) {
               <TaskItem
                 key={task.id}
                 task={task}
-                onSelect={() => setActiveTask(task.id)}
+                onSelect={() => setExaminingTask(task.id)}
                 onComplete={() => handleTaskAction(task)}
-                isSelected={activeTaskId === task.id}
+                onOpenChat={() => setActiveTask(task.id)}
+                isSelected={examiningTaskId === task.id}
                 showCompletionDate
               />
             ))}
