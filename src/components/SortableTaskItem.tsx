@@ -7,6 +7,7 @@ interface SortableTaskItemProps {
   task: Task
   onSelect: () => void
   onComplete: () => void
+  onOpenChat?: () => void
   isSelected?: boolean
 }
 
@@ -14,6 +15,7 @@ export function SortableTaskItem({
   task,
   onSelect,
   onComplete,
+  onOpenChat,
   isSelected
 }: SortableTaskItemProps) {
   const {
@@ -38,12 +40,12 @@ export function SortableTaskItem({
       style={style}
       {...attributes}
       {...listeners}
-      className={isDragging ? 'bg-surface shadow-elevated rounded-lg' : ''}
     >
       <TaskItem
         task={task}
         onSelect={onSelect}
         onComplete={onComplete}
+        onOpenChat={onOpenChat}
         isSelected={isSelected}
       />
     </div>

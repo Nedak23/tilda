@@ -3,16 +3,19 @@ import { useTaskStore } from './stores/taskStore'
 import { Sidebar } from './components/Sidebar'
 import { TaskList } from './components/TaskList'
 import { TaskChat } from './components/TaskChat'
+import { TaskModal } from './components/TaskModal'
 import { InlineTaskCreate } from './components/InlineTaskCreate'
 
 function App() {
   const {
     currentView,
     activeTaskId,
+    examiningTaskId,
     tasks,
     isLoading,
     loadTasks,
-    setActiveTask
+    setActiveTask,
+    setExaminingTask
   } = useTaskStore()
 
   const [isCreatingTask, setIsCreatingTask] = useState(false)
@@ -37,15 +40,18 @@ function App() {
           setIsCreatingTask(false)
         } else if (activeTaskId) {
           setActiveTask(null)
+        } else if (examiningTaskId) {
+          setExaminingTask(null)
         }
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activeTaskId, isCreatingTask, currentView, setActiveTask])
+  }, [activeTaskId, examiningTaskId, isCreatingTask, currentView, setActiveTask, setExaminingTask])
 
   const activeTask = tasks.find(t => t.id === activeTaskId)
+  const examiningTask = tasks.find(t => t.id === examiningTaskId)
 
   const getViewTitle = () => {
     switch (currentView) {
@@ -160,6 +166,15 @@ function App() {
           </>
         )}
       </main>
+
+      {/* Task Modal */}
+      {examiningTask && (
+        <TaskModal
+          task={examiningTask}
+          onClose={() => setExaminingTask(null)}
+          onExpandChat={() => setActiveTask(examiningTask.id)}
+        />
+      )}
     </div>
   )
 }

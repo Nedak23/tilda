@@ -5,6 +5,7 @@ interface TaskStore {
   // State
   tasks: Task[]
   activeTaskId: string | null
+  examiningTaskId: string | null
   currentView: ViewType
   isLoading: boolean
   error: string | null
@@ -19,6 +20,7 @@ interface TaskStore {
   // View actions
   setCurrentView: (view: ViewType) => void
   setActiveTask: (taskId: string | null) => void
+  setExaminingTask: (taskId: string | null) => void
 
   // Task actions
   loadTasks: () => Promise<void>
@@ -49,6 +51,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   // Initial state
   tasks: [],
   activeTaskId: null,
+  examiningTaskId: null,
   currentView: 'today',
   isLoading: false,
   error: null,
@@ -58,11 +61,22 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
   // View actions
   setCurrentView: (view) => {
-    set({ currentView: view, activeTaskId: null })
+    set({ currentView: view, activeTaskId: null, examiningTaskId: null })
+  },
+
+  setExaminingTask: async (taskId) => {
+    set({ examiningTaskId: taskId })
+
+    if (taskId) {
+      // Load attachments if not loaded (needed for detail view)
+      if (!get().attachmentsByTask[taskId]) {
+        await get().loadAttachments(taskId)
+      }
+    }
   },
 
   setActiveTask: async (taskId) => {
-    set({ activeTaskId: taskId })
+    set({ activeTaskId: taskId, examiningTaskId: null })
 
     if (taskId) {
       // Clear unread indicator

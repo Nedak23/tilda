@@ -73,17 +73,23 @@ button:focus-visible {
   @apply fixed inset-0 bg-black/50 backdrop-blur-sm;
 }
 
-/* Input styling for dark mode */
-input[type="text"],
+/* Input styling for dark mode - only apply background to inputs with .input-styled class */
 input[type="date"],
 textarea {
   @apply bg-surface-tertiary border-none text-text placeholder-text-placeholder;
 }
 
-input[type="text"]:focus,
+input[type="text"] {
+  @apply border-none text-text placeholder-text-placeholder;
+}
+
 input[type="date"]:focus,
 textarea:focus {
   @apply ring-1 ring-accent-blue outline-none;
+}
+
+input[type="text"]:focus {
+  @apply outline-none;
 }
 
 /* Date picker styling */
