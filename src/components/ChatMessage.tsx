@@ -28,14 +28,11 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
             <span className="inline-block w-1.5 h-4 bg-current ml-0.5 animate-pulse" />
           )}
         </div>
-        <div
-          className={`
-            text-2xs mt-1
-            ${isUser ? 'text-white/70' : 'text-text-tertiary'}
-          `}
-        >
-          {format(new Date(message.timestamp), 'h:mm a')}
-        </div>
+        {!isUser && (
+          <div className="text-2xs mt-1 text-text-tertiary">
+            {format(new Date(message.timestamp), 'h:mm a')}
+          </div>
+        )}
       </div>
     </div>
   )

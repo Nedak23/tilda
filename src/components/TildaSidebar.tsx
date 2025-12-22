@@ -30,14 +30,11 @@ function TildaChatMessage({ message, isStreaming = false }: { message: TildaMess
             <span className="inline-block w-1.5 h-4 bg-current ml-0.5 animate-pulse" />
           )}
         </div>
-        <div
-          className={`
-            text-2xs mt-1
-            ${isUser ? 'text-white/70' : 'text-text-tertiary'}
-          `}
-        >
-          {format(new Date(message.timestamp), 'h:mm a')}
-        </div>
+        {!isUser && (
+          <div className="text-2xs mt-1 text-text-tertiary">
+            {format(new Date(message.timestamp), 'h:mm a')}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -102,30 +99,34 @@ export function TildaSidebar({ isOpen, onClose }: TildaSidebarProps) {
       `}
     >
       {/* Header */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-border-light">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">💬</span>
-          <h2 className="font-semibold text-text">Tilda</h2>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={clearTildaHistory}
-            className="p-1.5 rounded text-text-tertiary hover:text-text-secondary hover:bg-surface-secondary transition-colors"
-            title="Clear history"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded text-text-tertiary hover:text-text-secondary hover:bg-surface-secondary transition-colors"
-            title="Close"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+      <div className="flex-shrink-0 border-b border-border-light">
+        <div className="h-12 relative">
+          {/* Drag area behind content */}
+          <div className="absolute inset-0 titlebar-drag" />
+          {/* Content on top */}
+          <div className="relative h-full flex items-center justify-between px-4">
+            <h2 className="font-semibold text-text">Tilda</h2>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={clearTildaHistory}
+                className="titlebar-no-drag p-1.5 rounded text-text-tertiary hover:text-text-secondary hover:bg-surface-secondary transition-colors"
+                title="Clear history"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+              <button
+                onClick={onClose}
+                className="titlebar-no-drag p-1.5 rounded text-text-tertiary hover:text-text-secondary hover:bg-surface-secondary transition-colors"
+                title="Close"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -159,15 +160,11 @@ export function TildaSidebar({ isOpen, onClose }: TildaSidebarProps) {
           />
         )}
 
-        {/* Typing indicator */}
+        {/* Loading spinner */}
         {isTildaPending && !tildaStreamingContent && (
           <div className="flex justify-start animate-fade-in">
             <div className="bg-surface-tertiary px-4 py-3 rounded-2xl rounded-bl-md">
-              <div className="flex gap-1">
-                <span className="w-2 h-2 bg-text-tertiary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-2 h-2 bg-text-tertiary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-2 h-2 bg-text-tertiary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
+              <div className="w-4 h-4 border-2 border-text-tertiary border-t-transparent rounded-full animate-spin" />
             </div>
           </div>
         )}
@@ -184,7 +181,7 @@ export function TildaSidebar({ isOpen, onClose }: TildaSidebarProps) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask Tilda..."
-            className="flex-1 bg-surface-secondary text-text text-sm rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-accent-blue/50 min-h-[40px] max-h-[120px]"
+            className="flex-1 bg-[#1a1a1a] text-text text-sm rounded-2xl px-4 py-2.5 resize-none focus:outline-none min-h-[40px] max-h-[120px]"
             rows={1}
             disabled={isTildaPending}
           />
