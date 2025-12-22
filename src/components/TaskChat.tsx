@@ -217,12 +217,8 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
 
         {isPending && messages[messages.length - 1]?.sender === 'user' && (
           <div className="flex justify-start">
-            <div className="bg-surface-tertiary px-4 py-2.5 rounded-2xl rounded-bl-md">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 bg-text-tertiary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-2 h-2 bg-text-tertiary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-2 h-2 bg-text-tertiary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
+            <div className="bg-surface-tertiary px-4 py-3 rounded-2xl rounded-bl-md">
+              <div className="w-4 h-4 border-2 border-text-tertiary border-t-transparent rounded-full animate-spin" />
             </div>
           </div>
         )}
@@ -270,7 +266,7 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
               onKeyDown={handleKeyDown}
               placeholder="Type a message..."
               rows={1}
-              className="w-full px-4 py-2.5 bg-surface-tertiary rounded-xl text-sm text-text placeholder-text-tertiary resize-none focus:outline-none focus:ring-1 focus:ring-accent-blue max-h-32"
+              className="w-full px-4 py-2.5 bg-[#1a1a1a] rounded-2xl text-sm text-text placeholder-text-tertiary resize-none focus:outline-none max-h-32"
               style={{
                 minHeight: '42px',
                 height: Math.min(input.split('\n').length * 24 + 18, 128) + 'px'

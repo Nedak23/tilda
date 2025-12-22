@@ -182,8 +182,14 @@ ipcMain.on('tilda:cancel', () => {
   cancelTildaRequest()
 })
 
-ipcMain.handle('tilda:clearHistory', () => {
-  clearTildaMessages()
+ipcMain.handle('tilda:clearHistory', async () => {
+  try {
+    clearTildaMessages()
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to clear Tilda history:', error)
+    throw error
+  }
 })
 
 // App lifecycle

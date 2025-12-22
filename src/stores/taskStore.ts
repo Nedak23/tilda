@@ -443,6 +443,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       await window.api.tilda.clearHistory()
       set({ tildaMessages: [] })
     } catch (error) {
+      console.error('Failed to clear Tilda history:', error)
       set({ error: (error as Error).message })
     }
   }
