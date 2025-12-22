@@ -21,9 +21,12 @@ import {
   getAttachmentsByTask,
   createAttachment,
   deleteAttachment,
-  setUnreadAgentMessage
+  setUnreadAgentMessage,
+  getTildaMessages,
+  clearTildaMessages
 } from './database'
 import { sendMessage, cancelRequest } from './llm'
+import { sendTildaMessage, cancelTildaRequest } from './tilda'
 import { getSettings, saveSettings, type Settings } from './settings'
 import type { CreateTaskInput, UpdateTaskInput, MessageSender } from '../src/types'
 
@@ -157,6 +160,30 @@ ipcMain.handle('settings:get', () => {
 
 ipcMain.handle('settings:save', (_event, settings: Settings) => {
   saveSettings(settings)
+})
+
+// IPC Handlers for Tilda
+ipcMain.handle('tilda:getMessages', () => {
+  return getTildaMessages()
+})
+
+ipcMain.handle('tilda:sendMessage', async (event, userMessage: string, channel: string) => {
+  try {
+    const response = await sendTildaMessage(userMessage, (chunk: string) => {
+      event.sender.send(channel, chunk)
+    })
+    return response
+  } catch (error) {
+    throw error
+  }
+})
+
+ipcMain.on('tilda:cancel', () => {
+  cancelTildaRequest()
+})
+
+ipcMain.handle('tilda:clearHistory', () => {
+  clearTildaMessages()
 })
 
 // App lifecycle

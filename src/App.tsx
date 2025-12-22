@@ -6,6 +6,8 @@ import { TaskChat } from './components/TaskChat'
 import { TaskModal } from './components/TaskModal'
 import { InlineTaskCreate } from './components/InlineTaskCreate'
 import { SettingsModal } from './components/SettingsModal'
+import { TildaToggleButton } from './components/TildaToggleButton'
+import { TildaSidebar } from './components/TildaSidebar'
 
 function App() {
   const {
@@ -21,6 +23,7 @@ function App() {
 
   const [isCreatingTask, setIsCreatingTask] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isTildaOpen, setIsTildaOpen] = useState(false)
 
   useEffect(() => {
     loadTasks()
@@ -38,7 +41,9 @@ function App() {
       }
       // Escape to go back or cancel creation
       if (e.key === 'Escape') {
-        if (isCreatingTask) {
+        if (isTildaOpen) {
+          setIsTildaOpen(false)
+        } else if (isCreatingTask) {
           setIsCreatingTask(false)
         } else if (activeTaskId) {
           setActiveTask(null)
@@ -46,11 +51,16 @@ function App() {
           setExaminingTask(null)
         }
       }
+      // Cmd/Ctrl + Shift + T to toggle Tilda
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 't') {
+        e.preventDefault()
+        setIsTildaOpen(!isTildaOpen)
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activeTaskId, examiningTaskId, isCreatingTask, currentView, setActiveTask, setExaminingTask])
+  }, [activeTaskId, examiningTaskId, isCreatingTask, currentView, setActiveTask, setExaminingTask, isTildaOpen])
 
   const activeTask = tasks.find(t => t.id === activeTaskId)
   const examiningTask = tasks.find(t => t.id === examiningTaskId)
@@ -91,7 +101,7 @@ function App() {
       <Sidebar onOpenSettings={() => setIsSettingsOpen(true)} />
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 relative">
         {activeTask ? (
           <TaskChat
             task={activeTask}
@@ -100,9 +110,15 @@ function App() {
         ) : (
           <>
             {/* Header */}
-            <header className="flex-shrink-0">
+            <header className="flex-shrink-0 relative">
               {/* Titlebar drag area */}
               <div className="h-12 titlebar-drag" />
+
+              {/* Tilda Toggle Button */}
+              <TildaToggleButton
+                isOpen={isTildaOpen}
+                onToggle={() => setIsTildaOpen(!isTildaOpen)}
+              />
 
               {/* View Header */}
               <div className="flex items-center gap-3 px-6 pb-6">
@@ -182,6 +198,12 @@ function App() {
       {isSettingsOpen && (
         <SettingsModal onClose={() => setIsSettingsOpen(false)} />
       )}
+
+      {/* Tilda Sidebar */}
+      <TildaSidebar
+        isOpen={isTildaOpen}
+        onClose={() => setIsTildaOpen(false)}
+      />
     </div>
   )
 }

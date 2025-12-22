@@ -9,7 +9,8 @@ import type {
   CreateTaskInput,
   UpdateTaskInput,
   MessageSender,
-  RecurrenceRule
+  RecurrenceRule,
+  TildaMessage
 } from '../src/types'
 
 let db: Database.Database
@@ -65,6 +66,15 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_tasks_date ON tasks(date_to_work_on);
     CREATE INDEX IF NOT EXISTS idx_messages_task ON messages(task_id);
     CREATE INDEX IF NOT EXISTS idx_attachments_task ON attachments(task_id);
+
+    CREATE TABLE IF NOT EXISTS tilda_messages (
+      id TEXT PRIMARY KEY,
+      sender TEXT CHECK(sender IN ('user', 'agent')) NOT NULL,
+      content TEXT NOT NULL,
+      timestamp TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tilda_messages_timestamp ON tilda_messages(timestamp);
   `)
 }
 
@@ -427,4 +437,78 @@ export function createAttachment(
 
 export function deleteAttachment(id: string): void {
   db.prepare('DELETE FROM attachments WHERE id = ?').run(id)
+}
+
+// Tilda message operations
+
+function rowToTildaMessage(row: Record<string, unknown>): TildaMessage {
+  return {
+    id: row.id as string,
+    sender: row.sender as MessageSender,
+    content: row.content as string,
+    timestamp: row.timestamp as string
+  }
+}
+
+export function getTildaMessages(): TildaMessage[] {
+  const rows = db.prepare(
+    'SELECT * FROM tilda_messages ORDER BY timestamp ASC'
+  ).all()
+  return rows.map(row => rowToTildaMessage(row as Record<string, unknown>))
+}
+
+export function createTildaMessage(content: string, sender: MessageSender): TildaMessage {
+  const id = uuidv4()
+  const timestamp = new Date().toISOString()
+
+  db.prepare(`
+    INSERT INTO tilda_messages (id, sender, content, timestamp)
+    VALUES (?, ?, ?, ?)
+  `).run(id, sender, content, timestamp)
+
+  return { id, sender, content, timestamp }
+}
+
+export function clearTildaMessages(): void {
+  db.prepare('DELETE FROM tilda_messages').run()
+}
+
+// Search tasks for Tilda tool
+
+export interface SearchTasksCriteria {
+  status?: 'today' | 'upcoming' | 'archived' | 'all'
+  searchQuery?: string
+  dateFrom?: string
+  dateTo?: string
+}
+
+export function searchTasks(criteria: SearchTasksCriteria): Task[] {
+  let query = 'SELECT * FROM tasks WHERE 1=1'
+  const params: unknown[] = []
+
+  if (criteria.status && criteria.status !== 'all') {
+    query += ' AND status = ?'
+    params.push(criteria.status)
+  }
+
+  if (criteria.searchQuery) {
+    query += ' AND (name LIKE ? OR description LIKE ?)'
+    const searchPattern = `%${criteria.searchQuery}%`
+    params.push(searchPattern, searchPattern)
+  }
+
+  if (criteria.dateFrom) {
+    query += ' AND date_to_work_on >= ?'
+    params.push(criteria.dateFrom)
+  }
+
+  if (criteria.dateTo) {
+    query += ' AND date_to_work_on <= ?'
+    params.push(criteria.dateTo)
+  }
+
+  query += ' ORDER BY sort_position ASC'
+
+  const rows = db.prepare(query).all(...params)
+  return rows.map(row => rowToTask(row as Record<string, unknown>))
 }

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Task, Message, Attachment, ViewType, CreateTaskInput, UpdateTaskInput } from '../types'
+import type { Task, Message, Attachment, ViewType, CreateTaskInput, UpdateTaskInput, TildaMessage } from '../types'
 
 interface TaskStore {
   // State
@@ -16,6 +16,11 @@ interface TaskStore {
 
   // Pending responses
   pendingResponses: Set<string>
+
+  // Tilda state
+  tildaMessages: TildaMessage[]
+  isTildaPending: boolean
+  tildaStreamingContent: string
 
   // View actions
   setCurrentView: (view: ViewType) => void
@@ -45,6 +50,11 @@ interface TaskStore {
   getTodayTasks: () => Task[]
   getUpcomingTasks: () => Task[]
   getArchivedTasks: () => Task[]
+
+  // Tilda actions
+  loadTildaMessages: () => Promise<void>
+  sendTildaMessage: (content: string) => Promise<void>
+  clearTildaHistory: () => Promise<void>
 }
 
 export const useTaskStore = create<TaskStore>((set, get) => ({
@@ -58,6 +68,9 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   messagesByTask: {},
   attachmentsByTask: {},
   pendingResponses: new Set(),
+  tildaMessages: [],
+  isTildaPending: false,
+  tildaStreamingContent: '',
 
   // View actions
   setCurrentView: (view) => {
@@ -366,5 +379,71 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     return get()
       .tasks.filter(t => t.status === 'archived')
       .sort((a, b) => (b.completionDate || '').localeCompare(a.completionDate || ''))
+  },
+
+  // Tilda actions
+  loadTildaMessages: async () => {
+    try {
+      const messages = await window.api.tilda.getMessages()
+      set({ tildaMessages: messages })
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  sendTildaMessage: async (content) => {
+    set({ isTildaPending: true, tildaStreamingContent: '' })
+
+    // Optimistically add user message
+    const tempUserMessage: TildaMessage = {
+      id: `temp-${Date.now()}`,
+      sender: 'user',
+      content,
+      timestamp: new Date().toISOString()
+    }
+
+    set(state => ({
+      tildaMessages: [...state.tildaMessages, tempUserMessage]
+    }))
+
+    // Track streaming response
+    let streamedContent = ''
+
+    try {
+      await window.api.tilda.sendMessage(content, (chunk) => {
+        streamedContent += chunk
+        set({ tildaStreamingContent: streamedContent })
+      })
+
+      // Reload messages to get persisted versions and refresh tasks (tools may have modified them)
+      await get().loadTildaMessages()
+      await get().loadTasks()
+    } catch (error) {
+      const errorMessage = (error as Error).message
+      set({ error: errorMessage })
+
+      // Show error as a message
+      const errorDisplayMessage: TildaMessage = {
+        id: crypto.randomUUID(),
+        sender: 'agent',
+        content: `Error: ${errorMessage}`,
+        timestamp: new Date().toISOString()
+      }
+
+      set(state => ({
+        tildaMessages: [...state.tildaMessages, errorDisplayMessage]
+      }))
+    } finally {
+      set({ isTildaPending: false, tildaStreamingContent: '' })
+    }
+  },
+
+  clearTildaHistory: async () => {
+    try {
+      await window.api.tilda.clearHistory()
+      set({ tildaMessages: [] })
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
   }
 }))
