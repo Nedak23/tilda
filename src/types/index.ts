@@ -102,12 +102,30 @@ export interface SettingsAPI {
   save: (settings: Settings) => Promise<void>
 }
 
+export interface TildaMessage {
+  id: string
+  sender: MessageSender
+  content: string
+  timestamp: string
+}
+
+export interface TildaAPI {
+  getMessages: () => Promise<TildaMessage[]>
+  sendMessage: (
+    userMessage: string,
+    onChunk: (chunk: string) => void
+  ) => Promise<string>
+  cancelRequest: () => void
+  clearHistory: () => Promise<void>
+}
+
 export interface ElectronAPI {
   tasks: TasksAPI
   messages: MessagesAPI
   attachments: AttachmentsAPI
   llm: LLMAPI
   settings: SettingsAPI
+  tilda: TildaAPI
 }
 
 declare global {

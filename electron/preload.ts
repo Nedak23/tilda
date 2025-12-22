@@ -49,6 +49,24 @@ const api: ElectronAPI = {
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
     save: (settings: Settings) => ipcRenderer.invoke('settings:save', settings)
+  },
+  tilda: {
+    getMessages: () => ipcRenderer.invoke('tilda:getMessages'),
+    sendMessage: (userMessage: string, onChunk: (chunk: string) => void) => {
+      // Create a unique channel for this request
+      const channel = `tilda:chunk:${Date.now()}`
+
+      // Set up listener for chunks
+      const listener = (_event: unknown, chunk: string) => onChunk(chunk)
+      ipcRenderer.on(channel, listener)
+
+      // Send the request
+      return ipcRenderer.invoke('tilda:sendMessage', userMessage, channel).finally(() => {
+        ipcRenderer.removeListener(channel, listener)
+      })
+    },
+    cancelRequest: () => ipcRenderer.send('tilda:cancel'),
+    clearHistory: () => ipcRenderer.invoke('tilda:clearHistory')
   }
 }
 
