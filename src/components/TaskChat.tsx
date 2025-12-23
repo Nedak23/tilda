@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { format } from 'date-fns'
 import { useTaskStore } from '../stores/taskStore'
 import { ChatMessage } from './ChatMessage'
+import { isFileSupported, FILE_INPUT_ACCEPT } from '../utils/fileUtils'
 import type { Task } from '../types'
 
 interface TaskChatProps {
@@ -65,7 +66,7 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
     if (!files?.length) return
 
     for (const file of files) {
-      if (!file.type.match(/^text\//) && !file.name.match(/\.(txt|md|markdown)$/i)) {
+      if (!isFileSupported(file)) {
         console.warn(`Skipping unsupported file: ${file.name}`)
         continue
       }
@@ -252,7 +253,7 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".txt,.md,.markdown,text/*"
+            accept={FILE_INPUT_ACCEPT}
             multiple
             onChange={handleFileSelect}
             className="hidden"

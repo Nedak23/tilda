@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import type { Task, Message, Attachment, ViewType, CreateTaskInput, UpdateTaskInput, TildaMessage, Context, ContextDocument, CreateContextInput, UpdateContextInput, AILearningNote, UpdateAILearningNoteInput } from '../types'
+import type { Task, Message, Attachment, ViewType, CreateTaskInput, UpdateTaskInput, TildaMessage, TildaAttachment, Context, ContextDocument, CreateContextInput, UpdateContextInput, AILearningNote, UpdateAILearningNoteInput } from '../types'
+import { readFileContent, getFileMimeType } from '../utils/fileUtils'
 
 interface TaskStore {
   // State
@@ -19,6 +20,7 @@ interface TaskStore {
 
   // Tilda state
   tildaMessages: TildaMessage[]
+  tildaAttachments: TildaAttachment[]
   isTildaPending: boolean
   tildaStreamingContent: string
 
@@ -63,6 +65,9 @@ interface TaskStore {
   loadTildaMessages: () => Promise<void>
   sendTildaMessage: (content: string) => Promise<void>
   clearTildaHistory: () => Promise<void>
+  loadTildaAttachments: () => Promise<void>
+  addTildaAttachment: (file: File) => Promise<void>
+  removeTildaAttachment: (id: string) => Promise<void>
 
   // Context actions
   loadContexts: () => Promise<void>
@@ -102,6 +107,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   attachmentsByTask: {},
   pendingResponses: new Set(),
   tildaMessages: [],
+  tildaAttachments: [],
   isTildaPending: false,
   tildaStreamingContent: '',
   contexts: [],
@@ -365,12 +371,14 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
   addAttachment: async (taskId, file) => {
     try {
-      const content = await file.text()
+      const content = await readFileContent(file)
+      const mimeType = getFileMimeType(file)
+
       const attachment = await window.api.attachments.create(
         taskId,
         file.name,
         content,
-        file.type || 'text/plain'
+        mimeType
       )
       set(state => ({
         attachmentsByTask: {
@@ -478,10 +486,50 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   clearTildaHistory: async () => {
     try {
       await window.api.tilda.clearHistory()
-      set({ tildaMessages: [] })
+      set({ tildaMessages: [], tildaAttachments: [] })
     } catch (error) {
       console.error('Failed to clear Tilda history:', error)
       set({ error: (error as Error).message })
+    }
+  },
+
+  loadTildaAttachments: async () => {
+    try {
+      const attachments = await window.api.tildaAttachments.getAll()
+      set({ tildaAttachments: attachments })
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  addTildaAttachment: async (file) => {
+    try {
+      const content = await readFileContent(file)
+      const mimeType = getFileMimeType(file)
+
+      const attachment = await window.api.tildaAttachments.create(
+        file.name,
+        content,
+        mimeType
+      )
+      set(state => ({
+        tildaAttachments: [...state.tildaAttachments, attachment]
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  removeTildaAttachment: async (id) => {
+    try {
+      await window.api.tildaAttachments.delete(id)
+      set(state => ({
+        tildaAttachments: state.tildaAttachments.filter(a => a.id !== id)
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
     }
   },
 

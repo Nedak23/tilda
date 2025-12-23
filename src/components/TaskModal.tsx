@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { format } from 'date-fns'
 import { useTaskStore } from '../stores/taskStore'
 import { ChatMessage } from './ChatMessage'
+import { isFileSupported, FILE_INPUT_ACCEPT } from '../utils/fileUtils'
 import type { Task } from '../types'
 
 interface TaskModalProps {
@@ -13,15 +14,21 @@ interface TaskModalProps {
 export function TaskModal({ task, onClose, onExpandChat }: TaskModalProps) {
   const {
     messagesByTask,
+    attachmentsByTask,
     pendingResponses,
     updateTask,
     sendMessage,
     loadMessages,
+    loadAttachments,
+    addAttachment,
+    removeAttachment,
     contexts,
     taskContextsByTask,
     setTaskContexts,
     loadTaskContexts
   } = useTaskStore()
+
+  const attachments = attachmentsByTask[task.id] || []
 
   const messages = messagesByTask[task.id] || []
   const isPending = pendingResponses.has(task.id)
@@ -38,6 +45,7 @@ export function TaskModal({ task, onClose, onExpandChat }: TaskModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load messages when modal opens
   useEffect(() => {
@@ -45,6 +53,13 @@ export function TaskModal({ task, onClose, onExpandChat }: TaskModalProps) {
       loadMessages(task.id)
     }
   }, [task.id, messagesByTask, loadMessages])
+
+  // Load attachments when modal opens
+  useEffect(() => {
+    if (!attachmentsByTask[task.id]) {
+      loadAttachments(task.id)
+    }
+  }, [task.id, attachmentsByTask, loadAttachments])
 
   // Load task contexts when modal opens
   useEffect(() => {
@@ -148,6 +163,21 @@ export function TaskModal({ task, onClose, onExpandChat }: TaskModalProps) {
     await setTaskContexts(task.id, newContexts)
   }
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files?.length) return
+
+    for (const file of files) {
+      if (!isFileSupported(file)) {
+        console.warn(`Skipping unsupported file: ${file.name}`)
+        continue
+      }
+      await addAttachment(task.id, file)
+    }
+
+    e.target.value = ''
+  }
+
   const today = format(new Date(), 'yyyy-MM-dd')
   const isToday = task.dateToWorkOn === today
 
@@ -228,6 +258,29 @@ export function TaskModal({ task, onClose, onExpandChat }: TaskModalProps) {
             </div>
           </div>
 
+          {/* Attachments */}
+          {attachments.length > 0 && (
+            <div className="px-4 pb-3">
+              <div className="flex flex-wrap gap-2">
+                {attachments.map(attachment => (
+                  <div
+                    key={attachment.id}
+                    className="flex items-center gap-2 px-2 py-1 bg-surface-tertiary rounded text-xs text-text-secondary"
+                  >
+                    <span className="truncate max-w-[120px]">{attachment.filename}</span>
+                    <button
+                      onClick={() => removeAttachment(attachment.id, task.id)}
+                      className="text-text-tertiary hover:text-error transition-colors"
+                      aria-label="Remove attachment"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Chat area */}
           <div className="flex-1 flex flex-col border-t border-border min-h-0">
             {/* Messages */}
@@ -271,6 +324,24 @@ export function TaskModal({ task, onClose, onExpandChat }: TaskModalProps) {
               <div className="w-8 h-8 rounded-full bg-accent-blue/20 flex items-center justify-center text-accent-blue text-xs font-medium">
                 KH
               </div>
+              {/* Attach button */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="p-1.5 text-text-tertiary hover:text-text transition-colors"
+                title="Attach file"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={FILE_INPUT_ACCEPT}
+                multiple
+                onChange={handleFileSelect}
+                className="hidden"
+              />
               <input
                 type="text"
                 value={chatInput}

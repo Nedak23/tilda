@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import {
   getTildaMessages,
   createTildaMessage,
+  getTildaAttachments,
   createTask,
   updateTask,
   reopenTask,
@@ -502,7 +503,50 @@ function executeToolCall(toolName: string, toolInput: ToolInput): string {
   }
 }
 
-function buildMessages(history: TildaMessage[], userMessage: string): Anthropic.MessageParam[] {
+interface TildaAttachmentData {
+  id: string
+  filename: string
+  content: string
+  mimeType: string
+  createdAt: string
+}
+
+function buildUserContentWithAttachments(
+  userMessage: string,
+  attachments: TildaAttachmentData[]
+): Anthropic.ContentBlockParam[] {
+  const content: Anthropic.ContentBlockParam[] = []
+
+  // Add image attachments as image content blocks
+  for (const attachment of attachments) {
+    if (attachment.mimeType.startsWith('image/')) {
+      // Extract base64 data from data URL (remove "data:image/png;base64," prefix)
+      const base64Match = attachment.content.match(/^data:([^;]+);base64,(.+)$/)
+      if (base64Match) {
+        const mediaType = base64Match[1] as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+        const base64Data = base64Match[2]
+        content.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: mediaType,
+            data: base64Data
+          }
+        })
+      }
+    }
+  }
+
+  // Add the text message
+  content.push({
+    type: 'text',
+    text: userMessage
+  })
+
+  return content
+}
+
+function buildMessages(history: TildaMessage[], userMessage: string, attachments: TildaAttachmentData[]): Anthropic.MessageParam[] {
   const messages: Anthropic.MessageParam[] = []
 
   for (const msg of history) {
@@ -512,12 +556,38 @@ function buildMessages(history: TildaMessage[], userMessage: string): Anthropic.
     })
   }
 
+  // For the current user message, include image attachments
+  const userContent = buildUserContentWithAttachments(userMessage, attachments)
   messages.push({
     role: 'user',
-    content: userMessage
+    content: userContent
   })
 
   return messages
+}
+
+function buildSystemPromptWithAttachments(attachments: TildaAttachmentData[]): string {
+  if (attachments.length === 0) {
+    return TILDA_SYSTEM_PROMPT
+  }
+
+  // Filter to only text files for system prompt context
+  // Images are handled separately as content blocks in the messages
+  const textAttachments = attachments.filter(a =>
+    a.mimeType.startsWith('text/') ||
+    /\.(txt|md|markdown)$/i.test(a.filename)
+  )
+
+  if (textAttachments.length === 0) {
+    return TILDA_SYSTEM_PROMPT
+  }
+
+  let attachmentContext = '\n\n## Attached Files\nThe user has attached the following text files for reference:\n'
+  for (const attachment of textAttachments) {
+    attachmentContext += `\n--- File: ${attachment.filename} ---\n${attachment.content}\n`
+  }
+
+  return TILDA_SYSTEM_PROMPT + attachmentContext
 }
 
 export async function sendTildaMessage(
@@ -531,19 +601,23 @@ export async function sendTildaMessage(
   const history = getTildaMessages()
   history.pop()
 
+  // Get attachments for this message
+  const attachments = getTildaAttachments()
+
   const client = getClient()
   abortController = new AbortController()
 
   try {
-    let messages = buildMessages(history, userMessage)
+    let messages = buildMessages(history, userMessage, attachments)
     const model = getModel()
+    const systemPrompt = buildSystemPromptWithAttachments(attachments)
 
     // Tool-calling loop
     while (true) {
       const response = await client.messages.create({
         model,
         max_tokens: 4096,
-        system: TILDA_SYSTEM_PROMPT,
+        system: systemPrompt,
         messages,
         tools: TILDA_TOOLS
       }, {

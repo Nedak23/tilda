@@ -12,6 +12,7 @@ import {
   type MessageSender,
   type RecurrenceRule,
   type TildaMessage,
+  type TildaAttachment,
   type Context,
   type ContextDocument,
   type CreateContextInput,
@@ -86,6 +87,14 @@ export function initDatabase(): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_tilda_messages_timestamp ON tilda_messages(timestamp);
+
+    CREATE TABLE IF NOT EXISTS tilda_attachments (
+      id TEXT PRIMARY KEY,
+      filename TEXT NOT NULL,
+      content TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
 
     CREATE TABLE IF NOT EXISTS contexts (
       id TEXT PRIMARY KEY,
@@ -560,6 +569,49 @@ export function createTildaMessage(content: string, sender: MessageSender): Tild
 
 export function clearTildaMessages(): void {
   db.prepare('DELETE FROM tilda_messages').run()
+}
+
+// Tilda attachment operations
+
+function rowToTildaAttachment(row: Record<string, unknown>): TildaAttachment {
+  return {
+    id: row.id as string,
+    filename: row.filename as string,
+    content: row.content as string,
+    mimeType: row.mime_type as string,
+    createdAt: row.created_at as string
+  }
+}
+
+export function getTildaAttachments(): TildaAttachment[] {
+  const rows = db.prepare(
+    'SELECT * FROM tilda_attachments ORDER BY created_at ASC'
+  ).all()
+  return rows.map(row => rowToTildaAttachment(row as Record<string, unknown>))
+}
+
+export function createTildaAttachment(
+  filename: string,
+  content: string,
+  mimeType: string
+): TildaAttachment {
+  const id = uuidv4()
+  const createdAt = new Date().toISOString()
+
+  db.prepare(`
+    INSERT INTO tilda_attachments (id, filename, content, mime_type, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(id, filename, content, mimeType, createdAt)
+
+  return { id, filename, content, mimeType, createdAt }
+}
+
+export function deleteTildaAttachment(id: string): void {
+  db.prepare('DELETE FROM tilda_attachments WHERE id = ?').run(id)
+}
+
+export function clearTildaAttachments(): void {
+  db.prepare('DELETE FROM tilda_attachments').run()
 }
 
 // Search tasks for Tilda tool
