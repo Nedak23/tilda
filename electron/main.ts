@@ -23,12 +23,24 @@ import {
   deleteAttachment,
   setUnreadAgentMessage,
   getTildaMessages,
-  clearTildaMessages
+  clearTildaMessages,
+  getAllContexts,
+  getContextById,
+  createContext,
+  updateContext,
+  deleteContext,
+  reorderContext,
+  getContextsByTask,
+  setTaskContexts,
+  getTasksByContext,
+  getDocumentsByContext,
+  createContextDocument,
+  deleteContextDocument
 } from './database'
 import { sendMessage, cancelRequest } from './llm'
 import { sendTildaMessage, cancelTildaRequest } from './tilda'
 import { getSettings, saveSettings, type Settings } from './settings'
-import type { CreateTaskInput, UpdateTaskInput, MessageSender } from '../src/types'
+import type { CreateTaskInput, UpdateTaskInput, MessageSender, CreateContextInput, UpdateContextInput } from '../src/types'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -190,6 +202,56 @@ ipcMain.handle('tilda:clearHistory', async () => {
     console.error('Failed to clear Tilda history:', error)
     throw error
   }
+})
+
+// IPC Handlers for Contexts
+ipcMain.handle('contexts:getAll', () => {
+  return getAllContexts()
+})
+
+ipcMain.handle('contexts:getById', (_event, id: string) => {
+  return getContextById(id)
+})
+
+ipcMain.handle('contexts:create', (_event, input: CreateContextInput) => {
+  return createContext(input)
+})
+
+ipcMain.handle('contexts:update', (_event, id: string, input: UpdateContextInput) => {
+  return updateContext(id, input)
+})
+
+ipcMain.handle('contexts:delete', (_event, id: string) => {
+  deleteContext(id)
+})
+
+ipcMain.handle('contexts:reorder', (_event, id: string, newPosition: number) => {
+  reorderContext(id, newPosition)
+})
+
+ipcMain.handle('contexts:getTaskContexts', (_event, taskId: string) => {
+  return getContextsByTask(taskId)
+})
+
+ipcMain.handle('contexts:setTaskContexts', (_event, taskId: string, contextIds: string[]) => {
+  setTaskContexts(taskId, contextIds)
+})
+
+ipcMain.handle('contexts:getTasksByContext', (_event, contextId: string) => {
+  return getTasksByContext(contextId)
+})
+
+// IPC Handlers for Context Documents
+ipcMain.handle('contextDocuments:getByContext', (_event, contextId: string) => {
+  return getDocumentsByContext(contextId)
+})
+
+ipcMain.handle('contextDocuments:create', (_event, contextId: string, filename: string, content: string, mimeType: string, fileSize: number) => {
+  return createContextDocument(contextId, filename, content, mimeType, fileSize)
+})
+
+ipcMain.handle('contextDocuments:delete', (_event, id: string) => {
+  deleteContextDocument(id)
 })
 
 // App lifecycle

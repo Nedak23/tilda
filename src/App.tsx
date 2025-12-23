@@ -8,6 +8,7 @@ import { InlineTaskCreate } from './components/InlineTaskCreate'
 import { SettingsModal } from './components/SettingsModal'
 import { TildaToggleButton } from './components/TildaToggleButton'
 import { TildaSidebar } from './components/TildaSidebar'
+import { ContextDetailView } from './components/ContextDetailView'
 
 function App() {
   const {
@@ -17,8 +18,13 @@ function App() {
     tasks,
     isLoading,
     loadTasks,
+    loadContexts,
+    completeTask,
     setActiveTask,
-    setExaminingTask
+    setExaminingTask,
+    contexts,
+    loadTaskContexts,
+    taskContextsByTask
   } = useTaskStore()
 
   const [isCreatingTask, setIsCreatingTask] = useState(false)
@@ -27,7 +33,17 @@ function App() {
 
   useEffect(() => {
     loadTasks()
-  }, [loadTasks])
+    loadContexts()
+  }, [loadTasks, loadContexts])
+
+  // Load task contexts for all tasks
+  useEffect(() => {
+    tasks.forEach(task => {
+      if (!taskContextsByTask[task.id]) {
+        loadTaskContexts(task.id)
+      }
+    })
+  }, [tasks, taskContextsByTask, loadTaskContexts])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -65,7 +81,15 @@ function App() {
   const activeTask = tasks.find(t => t.id === activeTaskId)
   const examiningTask = tasks.find(t => t.id === examiningTaskId)
 
+  // Check if we're viewing a context
+  const isContextView = currentView.startsWith('context:')
+  const currentContextId = isContextView ? currentView.replace('context:', '') : null
+  const currentContext = currentContextId ? contexts.find(c => c.id === currentContextId) : null
+
   const getViewTitle = () => {
+    if (isContextView && currentContext) {
+      return currentContext.name
+    }
     switch (currentView) {
       case 'today':
         return 'Today'
@@ -73,10 +97,15 @@ function App() {
         return 'Upcoming'
       case 'archive':
         return 'Logbook'
+      default:
+        return 'Tasks'
     }
   }
 
   const getViewIcon = () => {
+    if (isContextView) {
+      return <span className="text-text-secondary text-2xl">#</span>
+    }
     switch (currentView) {
       case 'today':
         return <span className="text-accent text-2xl">★</span>
@@ -84,6 +113,8 @@ function App() {
         return <span className="text-2xl">📅</span>
       case 'archive':
         return <span className="text-success text-2xl">✓</span>
+      default:
+        return null
     }
   }
 
@@ -107,6 +138,23 @@ function App() {
             task={activeTask}
             onBack={() => setActiveTask(null)}
           />
+        ) : isContextView && currentContextId ? (
+          <>
+            {/* Titlebar drag area for context view */}
+            <div className="h-12 titlebar-drag" />
+
+            {/* Tilda Toggle Button */}
+            <TildaToggleButton
+              isOpen={isTildaOpen}
+              onToggle={() => setIsTildaOpen(!isTildaOpen)}
+            />
+
+            <ContextDetailView
+              contextId={currentContextId}
+              onTaskSelect={(task) => setExaminingTask(task.id)}
+              onTaskComplete={(id) => completeTask(id)}
+            />
+          </>
         ) : (
           <>
             {/* Header */}

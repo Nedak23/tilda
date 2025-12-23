@@ -65,8 +65,16 @@ export function TaskList({ onCreateTask }: TaskListProps) {
     getArchivedTasks,
     completeTask,
     reopenTask,
-    reorderTask
+    reorderTask,
+    contexts,
+    taskContextsByTask
   } = useTaskStore()
+
+  // Helper to get contexts for a task
+  const getTaskContexts = (taskId: string) => {
+    const contextIds = taskContextsByTask[taskId] || []
+    return contexts.filter(c => contextIds.includes(c.id))
+  }
 
   const todayTasks = getTodayTasks()
   const upcomingGroups = useMemo(
@@ -149,6 +157,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                 onComplete={() => handleTaskAction(task)}
                 onOpenChat={() => setActiveTask(task.id)}
                 isSelected={examiningTaskId === task.id}
+                contexts={getTaskContexts(task.id)}
               />
             ))}
           </div>
@@ -193,6 +202,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                   onComplete={() => handleTaskAction(task)}
                   onOpenChat={() => setActiveTask(task.id)}
                   isSelected={examiningTaskId === task.id}
+                  contexts={getTaskContexts(task.id)}
                 />
               ))}
             </div>

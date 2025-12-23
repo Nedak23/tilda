@@ -10,7 +10,11 @@ import type {
   UpdateTaskInput,
   MessageSender,
   RecurrenceRule,
-  TildaMessage
+  TildaMessage,
+  Context,
+  ContextDocument,
+  CreateContextInput,
+  UpdateContextInput
 } from '../src/types'
 
 let db: Database.Database
@@ -75,6 +79,40 @@ export function initDatabase(): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_tilda_messages_timestamp ON tilda_messages(timestamp);
+
+    CREATE TABLE IF NOT EXISTS contexts (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      sort_position INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_contexts_sort ON contexts(sort_position);
+
+    CREATE TABLE IF NOT EXISTS task_contexts (
+      task_id TEXT NOT NULL,
+      context_id TEXT NOT NULL,
+      PRIMARY KEY (task_id, context_id),
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (context_id) REFERENCES contexts(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_task_contexts_task ON task_contexts(task_id);
+    CREATE INDEX IF NOT EXISTS idx_task_contexts_context ON task_contexts(context_id);
+
+    CREATE TABLE IF NOT EXISTS context_documents (
+      id TEXT PRIMARY KEY,
+      context_id TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      content TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      file_size INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (context_id) REFERENCES contexts(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_context_documents_context ON context_documents(context_id);
   `)
 }
 
@@ -284,6 +322,9 @@ function createNextRecurrence(completedTask: Task): void {
   // Copy attachments from original task
   const attachments = getAttachmentsByTask(completedTask.id)
 
+  // Copy context assignments from original task
+  const contexts = getContextsByTask(completedTask.id)
+
   const newTask = createTask({
     name: completedTask.name,
     dateToWorkOn: nextDate,
@@ -295,6 +336,11 @@ function createNextRecurrence(completedTask: Task): void {
   // Copy attachments to new task
   for (const attachment of attachments) {
     createAttachment(newTask.id, attachment.filename, attachment.content, attachment.mimeType)
+  }
+
+  // Copy context assignments to new task
+  if (contexts.length > 0) {
+    setTaskContexts(newTask.id, contexts.map(c => c.id))
   }
 }
 
@@ -480,35 +526,230 @@ export interface SearchTasksCriteria {
   searchQuery?: string
   dateFrom?: string
   dateTo?: string
+  contextId?: string
 }
 
 export function searchTasks(criteria: SearchTasksCriteria): Task[] {
-  let query = 'SELECT * FROM tasks WHERE 1=1'
+  let query = 'SELECT DISTINCT t.* FROM tasks t'
   const params: unknown[] = []
 
+  // Join with task_contexts if filtering by context
+  if (criteria.contextId) {
+    query += ' INNER JOIN task_contexts tc ON t.id = tc.task_id'
+  }
+
+  query += ' WHERE 1=1'
+
+  if (criteria.contextId) {
+    query += ' AND tc.context_id = ?'
+    params.push(criteria.contextId)
+  }
+
   if (criteria.status && criteria.status !== 'all') {
-    query += ' AND status = ?'
+    query += ' AND t.status = ?'
     params.push(criteria.status)
   }
 
   if (criteria.searchQuery) {
-    query += ' AND (name LIKE ? OR description LIKE ?)'
+    query += ' AND (t.name LIKE ? OR t.description LIKE ?)'
     const searchPattern = `%${criteria.searchQuery}%`
     params.push(searchPattern, searchPattern)
   }
 
   if (criteria.dateFrom) {
-    query += ' AND date_to_work_on >= ?'
+    query += ' AND t.date_to_work_on >= ?'
     params.push(criteria.dateFrom)
   }
 
   if (criteria.dateTo) {
-    query += ' AND date_to_work_on <= ?'
+    query += ' AND t.date_to_work_on <= ?'
     params.push(criteria.dateTo)
   }
 
-  query += ' ORDER BY sort_position ASC'
+  query += ' ORDER BY t.sort_position ASC'
 
   const rows = db.prepare(query).all(...params)
   return rows.map(row => rowToTask(row as Record<string, unknown>))
+}
+
+// Context operations
+
+function rowToContext(row: Record<string, unknown>): Context {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    description: row.description as string | undefined,
+    sortPosition: row.sort_position as number,
+    createdAt: row.created_at as string
+  }
+}
+
+export function getAllContexts(): Context[] {
+  const rows = db.prepare('SELECT * FROM contexts ORDER BY sort_position ASC').all()
+  return rows.map(row => rowToContext(row as Record<string, unknown>))
+}
+
+export function getContextById(id: string): Context | undefined {
+  const row = db.prepare('SELECT * FROM contexts WHERE id = ?').get(id)
+  return row ? rowToContext(row as Record<string, unknown>) : undefined
+}
+
+function getMaxContextSortPosition(): number {
+  const result = db.prepare(
+    'SELECT MAX(sort_position) as max FROM contexts'
+  ).get() as { max: number | null }
+  return result.max ?? -1
+}
+
+export function createContext(input: CreateContextInput): Context {
+  const id = uuidv4()
+  const now = new Date().toISOString()
+  const sortPosition = getMaxContextSortPosition() + 1
+
+  db.prepare(`
+    INSERT INTO contexts (id, name, description, sort_position, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(id, input.name, input.description ?? null, sortPosition, now)
+
+  return getContextById(id)!
+}
+
+export function updateContext(id: string, input: UpdateContextInput): Context {
+  const context = getContextById(id)
+  if (!context) throw new Error(`Context ${id} not found`)
+
+  const updates: string[] = []
+  const values: unknown[] = []
+
+  if (input.name !== undefined) {
+    updates.push('name = ?')
+    values.push(input.name)
+  }
+  if (input.description !== undefined) {
+    updates.push('description = ?')
+    values.push(input.description)
+  }
+
+  if (updates.length > 0) {
+    values.push(id)
+    db.prepare(`UPDATE contexts SET ${updates.join(', ')} WHERE id = ?`).run(...values)
+  }
+
+  return getContextById(id)!
+}
+
+export function deleteContext(id: string): void {
+  db.prepare('DELETE FROM contexts WHERE id = ?').run(id)
+}
+
+export function reorderContext(id: string, newPosition: number): void {
+  const context = getContextById(id)
+  if (!context) throw new Error(`Context ${id} not found`)
+
+  const oldPosition = context.sortPosition
+
+  if (newPosition === oldPosition) return
+
+  if (newPosition < oldPosition) {
+    db.prepare(`
+      UPDATE contexts
+      SET sort_position = sort_position + 1
+      WHERE sort_position >= ? AND sort_position < ?
+    `).run(newPosition, oldPosition)
+  } else {
+    db.prepare(`
+      UPDATE contexts
+      SET sort_position = sort_position - 1
+      WHERE sort_position > ? AND sort_position <= ?
+    `).run(oldPosition, newPosition)
+  }
+
+  db.prepare('UPDATE contexts SET sort_position = ? WHERE id = ?').run(newPosition, id)
+}
+
+// Task-Context relationship operations
+
+export function getContextsByTask(taskId: string): Context[] {
+  const rows = db.prepare(`
+    SELECT c.* FROM contexts c
+    INNER JOIN task_contexts tc ON c.id = tc.context_id
+    WHERE tc.task_id = ?
+    ORDER BY c.sort_position ASC
+  `).all(taskId)
+  return rows.map(row => rowToContext(row as Record<string, unknown>))
+}
+
+export function getTasksByContext(contextId: string): Task[] {
+  const rows = db.prepare(`
+    SELECT t.* FROM tasks t
+    INNER JOIN task_contexts tc ON t.id = tc.task_id
+    WHERE tc.context_id = ?
+    ORDER BY t.sort_position ASC
+  `).all(contextId)
+  return rows.map(row => rowToTask(row as Record<string, unknown>))
+}
+
+export function addTaskToContext(taskId: string, contextId: string): void {
+  db.prepare(`
+    INSERT OR IGNORE INTO task_contexts (task_id, context_id)
+    VALUES (?, ?)
+  `).run(taskId, contextId)
+}
+
+export function removeTaskFromContext(taskId: string, contextId: string): void {
+  db.prepare('DELETE FROM task_contexts WHERE task_id = ? AND context_id = ?').run(taskId, contextId)
+}
+
+export function setTaskContexts(taskId: string, contextIds: string[]): void {
+  // Remove all existing associations
+  db.prepare('DELETE FROM task_contexts WHERE task_id = ?').run(taskId)
+
+  // Add new associations
+  const insert = db.prepare('INSERT INTO task_contexts (task_id, context_id) VALUES (?, ?)')
+  for (const contextId of contextIds) {
+    insert.run(taskId, contextId)
+  }
+}
+
+// Context document operations
+
+function rowToContextDocument(row: Record<string, unknown>): ContextDocument {
+  return {
+    id: row.id as string,
+    contextId: row.context_id as string,
+    filename: row.filename as string,
+    content: row.content as string,
+    mimeType: row.mime_type as string,
+    fileSize: row.file_size as number,
+    createdAt: row.created_at as string
+  }
+}
+
+export function getDocumentsByContext(contextId: string): ContextDocument[] {
+  const rows = db.prepare(
+    'SELECT * FROM context_documents WHERE context_id = ? ORDER BY created_at ASC'
+  ).all(contextId)
+  return rows.map(row => rowToContextDocument(row as Record<string, unknown>))
+}
+
+export function createContextDocument(
+  contextId: string,
+  filename: string,
+  content: string,
+  mimeType: string,
+  fileSize: number
+): ContextDocument {
+  const id = uuidv4()
+  const createdAt = new Date().toISOString()
+
+  db.prepare(`
+    INSERT INTO context_documents (id, context_id, filename, content, mime_type, file_size, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, contextId, filename, content, mimeType, fileSize, createdAt)
+
+  return { id, contextId, filename, content, mimeType, fileSize, createdAt }
+}
+
+export function deleteContextDocument(id: string): void {
+  db.prepare('DELETE FROM context_documents WHERE id = ?').run(id)
 }

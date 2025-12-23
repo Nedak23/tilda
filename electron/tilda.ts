@@ -8,6 +8,10 @@ import {
   reopenTask,
   deleteTask,
   searchTasks,
+  getAllContexts,
+  createContext,
+  setTaskContexts,
+  getContextsByTask,
   type SearchTasksCriteria
 } from './database'
 import { getApiKey, getModel } from './settings'
@@ -41,12 +45,14 @@ function getTodayDateString(): string {
 const TILDA_SYSTEM_PROMPT = `You are Tilda, a helpful AI assistant integrated into a task management app. Your role is to help users manage their tasks efficiently.
 
 You have access to tools for task management:
-- create_task: Create new tasks with name, date, deadline, description, and recurrence
-- update_task: Modify existing tasks
+- create_task: Create new tasks with name, date, deadline, description, recurrence, and contexts
+- update_task: Modify existing tasks (including context assignments)
 - complete_task: Mark tasks as complete
 - reopen_task: Reopen completed tasks
 - delete_task: Remove tasks
-- search_tasks: Find tasks by status, date range, or text search
+- search_tasks: Find tasks by status, date range, text search, or context
+- create_context: Create a new organizational context
+- list_contexts: Show all available contexts
 
 When users ask about their tasks or want to manage them, use the appropriate tools. Be proactive in suggesting task organization and time management strategies.
 
@@ -58,6 +64,7 @@ Guidelines:
 - When the user says "tomorrow", calculate that relative to the current date
 - Confirm actions after tool execution
 - Provide task summaries when users ask about their tasks
+- Suggest using contexts to organize related tasks (e.g., work, personal, projects)
 - Suggest next steps when appropriate
 - If a task operation fails, explain what went wrong`
 
@@ -99,6 +106,11 @@ const TILDA_TOOLS: Anthropic.Tool[] = [
             }
           },
           required: ['frequency', 'interval']
+        },
+        contextIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional array of context IDs to assign this task to. Use list_contexts to get available context IDs.'
         }
       },
       required: ['name']
@@ -129,6 +141,11 @@ const TILDA_TOOLS: Anthropic.Tool[] = [
         description: {
           type: 'string',
           description: 'New description for the task'
+        },
+        contextIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'New array of context IDs for this task (replaces existing contexts). Use list_contexts to get available context IDs.'
         }
       },
       required: ['taskId']
@@ -198,8 +215,38 @@ const TILDA_TOOLS: Anthropic.Tool[] = [
         dateTo: {
           type: 'string',
           description: 'Filter tasks with dateToWorkOn <= this date (YYYY-MM-DD)'
+        },
+        contextId: {
+          type: 'string',
+          description: 'Filter tasks assigned to a specific context. Use list_contexts to get available context IDs.'
         }
       }
+    }
+  },
+  {
+    name: 'create_context',
+    description: 'Create a new organizational context for grouping tasks.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        name: {
+          type: 'string',
+          description: 'The name of the context (e.g., "Work", "Personal", "Project X")'
+        },
+        description: {
+          type: 'string',
+          description: 'Optional description of what this context is for'
+        }
+      },
+      required: ['name']
+    }
+  },
+  {
+    name: 'list_contexts',
+    description: 'List all available contexts. Use this to find context IDs before creating or updating tasks with context assignments.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {}
     }
   }
 ]
@@ -218,6 +265,8 @@ interface ToolInput {
   searchQuery?: string
   dateFrom?: string
   dateTo?: string
+  contextIds?: string[]
+  contextId?: string
 }
 
 function executeToolCall(toolName: string, toolInput: ToolInput): string {
@@ -232,14 +281,20 @@ function executeToolCall(toolName: string, toolInput: ToolInput): string {
           recurrenceRule: toolInput.recurrence
         }
         const task = createTask(input)
+        // Assign contexts if provided
+        if (toolInput.contextIds && toolInput.contextIds.length > 0) {
+          setTaskContexts(task.id, toolInput.contextIds)
+        }
+        const taskContexts = getContextsByTask(task.id)
         return JSON.stringify({
           success: true,
-          message: `Created task "${task.name}" for ${task.dateToWorkOn}`,
+          message: `Created task "${task.name}" for ${task.dateToWorkOn}${taskContexts.length > 0 ? ` in contexts: ${taskContexts.map(c => c.name).join(', ')}` : ''}`,
           task: {
             id: task.id,
             name: task.name,
             dateToWorkOn: task.dateToWorkOn,
-            status: task.status
+            status: task.status,
+            contexts: taskContexts.map(c => ({ id: c.id, name: c.name }))
           }
         })
       }
@@ -252,14 +307,20 @@ function executeToolCall(toolName: string, toolInput: ToolInput): string {
         if (toolInput.description) input.description = toolInput.description
 
         const task = updateTask(toolInput.taskId!, input)
+        // Update contexts if provided
+        if (toolInput.contextIds) {
+          setTaskContexts(task.id, toolInput.contextIds)
+        }
+        const taskContexts = getContextsByTask(task.id)
         return JSON.stringify({
           success: true,
-          message: `Updated task "${task.name}"`,
+          message: `Updated task "${task.name}"${toolInput.contextIds ? ` (contexts: ${taskContexts.length > 0 ? taskContexts.map(c => c.name).join(', ') : 'none'})` : ''}`,
           task: {
             id: task.id,
             name: task.name,
             dateToWorkOn: task.dateToWorkOn,
-            status: task.status
+            status: task.status,
+            contexts: taskContexts.map(c => ({ id: c.id, name: c.name }))
           }
         })
       }
@@ -305,18 +366,52 @@ function executeToolCall(toolName: string, toolInput: ToolInput): string {
         if (toolInput.searchQuery) criteria.searchQuery = toolInput.searchQuery
         if (toolInput.dateFrom) criteria.dateFrom = toolInput.dateFrom
         if (toolInput.dateTo) criteria.dateTo = toolInput.dateTo
+        if (toolInput.contextId) criteria.contextId = toolInput.contextId
 
         const tasks = searchTasks(criteria)
         return JSON.stringify({
           success: true,
           count: tasks.length,
-          tasks: tasks.map(t => ({
-            id: t.id,
-            name: t.name,
-            dateToWorkOn: t.dateToWorkOn,
-            deadline: t.deadline,
-            status: t.status,
-            description: t.description
+          tasks: tasks.map(t => {
+            const taskContexts = getContextsByTask(t.id)
+            return {
+              id: t.id,
+              name: t.name,
+              dateToWorkOn: t.dateToWorkOn,
+              deadline: t.deadline,
+              status: t.status,
+              description: t.description,
+              contexts: taskContexts.map(c => ({ id: c.id, name: c.name }))
+            }
+          })
+        })
+      }
+
+      case 'create_context': {
+        const context = createContext({
+          name: toolInput.name!,
+          description: toolInput.description
+        })
+        return JSON.stringify({
+          success: true,
+          message: `Created context "${context.name}"`,
+          context: {
+            id: context.id,
+            name: context.name,
+            description: context.description
+          }
+        })
+      }
+
+      case 'list_contexts': {
+        const contexts = getAllContexts()
+        return JSON.stringify({
+          success: true,
+          count: contexts.length,
+          contexts: contexts.map(c => ({
+            id: c.id,
+            name: c.name,
+            description: c.description
           }))
         })
       }

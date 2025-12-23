@@ -16,7 +16,11 @@ export function TaskModal({ task, onClose, onExpandChat }: TaskModalProps) {
     pendingResponses,
     updateTask,
     sendMessage,
-    loadMessages
+    loadMessages,
+    contexts,
+    taskContextsByTask,
+    setTaskContexts,
+    loadTaskContexts
   } = useTaskStore()
 
   const messages = messagesByTask[task.id] || []
@@ -29,6 +33,7 @@ export function TaskModal({ task, onClose, onExpandChat }: TaskModalProps) {
   const [chatInput, setChatInput] = useState('')
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [showDeadlinePicker, setShowDeadlinePicker] = useState(false)
+  const [showContextPicker, setShowContextPicker] = useState(false)
 
   const modalRef = useRef<HTMLDivElement>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
@@ -40,6 +45,15 @@ export function TaskModal({ task, onClose, onExpandChat }: TaskModalProps) {
       loadMessages(task.id)
     }
   }, [task.id, messagesByTask, loadMessages])
+
+  // Load task contexts when modal opens
+  useEffect(() => {
+    if (!taskContextsByTask[task.id]) {
+      loadTaskContexts(task.id)
+    }
+  }, [task.id, taskContextsByTask, loadTaskContexts])
+
+  const taskContexts = taskContextsByTask[task.id] || []
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -125,6 +139,13 @@ export function TaskModal({ task, onClose, onExpandChat }: TaskModalProps) {
   const handleClearDeadline = async () => {
     await updateTask(task.id, { deadline: undefined })
     setShowDeadlinePicker(false)
+  }
+
+  const handleToggleContext = async (contextId: string) => {
+    const newContexts = taskContexts.includes(contextId)
+      ? taskContexts.filter(id => id !== contextId)
+      : [...taskContexts, contextId]
+    await setTaskContexts(task.id, newContexts)
   }
 
   const today = format(new Date(), 'yyyy-MM-dd')
@@ -322,6 +343,44 @@ export function TaskModal({ task, onClose, onExpandChat }: TaskModalProps) {
                   >
                     Clear deadline
                   </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Contexts */}
+          <div>
+            <label className="text-xs text-text-tertiary uppercase tracking-wide">Contexts</label>
+            <button
+              onClick={() => setShowContextPicker(!showContextPicker)}
+              className="mt-1 flex items-center gap-2 text-sm text-text hover:text-accent-blue transition-colors"
+            >
+              <span className="text-text-secondary">#</span>
+              <span>
+                {taskContexts.length === 0
+                  ? 'None'
+                  : contexts.filter(c => taskContexts.includes(c.id)).map(c => c.name).join(', ')}
+              </span>
+            </button>
+            {showContextPicker && (
+              <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                {contexts.length === 0 ? (
+                  <p className="text-xs text-text-tertiary italic">No contexts created</p>
+                ) : (
+                  contexts.map(context => (
+                    <label
+                      key={context.id}
+                      className="flex items-center gap-2 px-2 py-1 rounded hover:bg-surface-tertiary cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={taskContexts.includes(context.id)}
+                        onChange={() => handleToggleContext(context.id)}
+                        className="rounded border-border-light text-accent focus:ring-accent"
+                      />
+                      <span className="text-sm text-text">#{context.name}</span>
+                    </label>
+                  ))
                 )}
               </div>
             )}

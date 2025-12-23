@@ -46,7 +46,7 @@ export interface Attachment {
   createdAt: string
 }
 
-export type ViewType = 'today' | 'upcoming' | 'archive'
+export type ViewType = 'today' | 'upcoming' | 'archive' | `context:${string}`
 
 export interface CreateTaskInput {
   name: string
@@ -54,6 +54,7 @@ export interface CreateTaskInput {
   deadline?: string
   description?: string
   recurrenceRule?: RecurrenceRule
+  contextIds?: string[]
 }
 
 export interface UpdateTaskInput {
@@ -62,6 +63,7 @@ export interface UpdateTaskInput {
   deadline?: string
   description?: string
   sortPosition?: number
+  contextIds?: string[]
 }
 
 // IPC API types
@@ -119,6 +121,53 @@ export interface TildaAPI {
   clearHistory: () => Promise<void>
 }
 
+// Context types
+export interface Context {
+  id: string
+  name: string
+  description?: string
+  sortPosition: number
+  createdAt: string
+}
+
+export interface ContextDocument {
+  id: string
+  contextId: string
+  filename: string
+  content: string
+  mimeType: string
+  fileSize: number
+  createdAt: string
+}
+
+export interface CreateContextInput {
+  name: string
+  description?: string
+}
+
+export interface UpdateContextInput {
+  name?: string
+  description?: string
+}
+
+export interface ContextsAPI {
+  getAll: () => Promise<Context[]>
+  getById: (id: string) => Promise<Context | undefined>
+  create: (input: CreateContextInput) => Promise<Context>
+  update: (id: string, input: UpdateContextInput) => Promise<Context>
+  delete: (id: string) => Promise<void>
+  reorder: (id: string, newPosition: number) => Promise<void>
+  getTaskContexts: (taskId: string) => Promise<Context[]>
+  setTaskContexts: (taskId: string, contextIds: string[]) => Promise<void>
+  getTasksByContext: (contextId: string) => Promise<Task[]>
+}
+
+export interface ContextDocumentsAPI {
+  getByContext: (contextId: string) => Promise<ContextDocument[]>
+  create: (contextId: string, filename: string, content: string, mimeType: string, fileSize: number) => Promise<ContextDocument>
+  delete: (id: string) => Promise<void>
+}
+
 export interface ElectronAPI {
   tasks: TasksAPI
   messages: MessagesAPI
@@ -126,6 +175,8 @@ export interface ElectronAPI {
   llm: LLMAPI
   settings: SettingsAPI
   tilda: TildaAPI
+  contexts: ContextsAPI
+  contextDocuments: ContextDocumentsAPI
 }
 
 declare global {
