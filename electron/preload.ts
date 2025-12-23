@@ -4,7 +4,9 @@ import type {
   UpdateTaskInput,
   MessageSender,
   ElectronAPI,
-  Settings
+  Settings,
+  CreateContextInput,
+  UpdateContextInput
 } from '../src/types'
 
 const api: ElectronAPI = {
@@ -67,6 +69,23 @@ const api: ElectronAPI = {
     },
     cancelRequest: () => ipcRenderer.send('tilda:cancel'),
     clearHistory: () => ipcRenderer.invoke('tilda:clearHistory')
+  },
+  contexts: {
+    getAll: () => ipcRenderer.invoke('contexts:getAll'),
+    getById: (id: string) => ipcRenderer.invoke('contexts:getById', id),
+    create: (input: CreateContextInput) => ipcRenderer.invoke('contexts:create', input),
+    update: (id: string, input: UpdateContextInput) => ipcRenderer.invoke('contexts:update', id, input),
+    delete: (id: string) => ipcRenderer.invoke('contexts:delete', id),
+    reorder: (id: string, newPosition: number) => ipcRenderer.invoke('contexts:reorder', id, newPosition),
+    getTaskContexts: (taskId: string) => ipcRenderer.invoke('contexts:getTaskContexts', taskId),
+    setTaskContexts: (taskId: string, contextIds: string[]) => ipcRenderer.invoke('contexts:setTaskContexts', taskId, contextIds),
+    getTasksByContext: (contextId: string) => ipcRenderer.invoke('contexts:getTasksByContext', contextId)
+  },
+  contextDocuments: {
+    getByContext: (contextId: string) => ipcRenderer.invoke('contextDocuments:getByContext', contextId),
+    create: (contextId: string, filename: string, content: string, mimeType: string, fileSize: number) =>
+      ipcRenderer.invoke('contextDocuments:create', contextId, filename, content, mimeType, fileSize),
+    delete: (id: string) => ipcRenderer.invoke('contextDocuments:delete', id)
   }
 }
 

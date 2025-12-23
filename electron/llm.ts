@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { getTaskById, getMessagesByTask, getAttachmentsByTask, createMessage, setUnreadAgentMessage } from './database'
+import { getTaskById, getMessagesByTask, getAttachmentsByTask, createMessage, setUnreadAgentMessage, getContextsByTask, getDocumentsByContext } from './database'
 import { getApiKey, getModel } from './settings'
-import type { Message, Attachment } from '../src/types'
+import type { Message, Attachment, Context, ContextDocument } from '../src/types'
 
 let anthropic: Anthropic | null = null
 let currentApiKey: string | null = null
@@ -24,11 +24,35 @@ function getClient(): Anthropic {
 
 const activeRequests = new Map<string, AbortController>()
 
-function buildSystemPrompt(taskName: string, description?: string): string {
+interface ContextInfo {
+  context: Context
+  documents: ContextDocument[]
+}
+
+function buildSystemPrompt(taskName: string, description?: string, contextInfos?: ContextInfo[]): string {
   let prompt = `You are a helpful AI assistant helping the user complete this task: "${taskName}".`
   if (description) {
     prompt += `\n\nTask description:\n${description}`
   }
+
+  // Add context info if available
+  if (contextInfos && contextInfos.length > 0) {
+    prompt += '\n\n--- Task Contexts ---'
+    for (const { context, documents } of contextInfos) {
+      prompt += `\n\nContext: ${context.name}`
+      if (context.description) {
+        prompt += `\nDescription: ${context.description}`
+      }
+      if (documents.length > 0) {
+        prompt += '\n\nContext Documents:'
+        for (const doc of documents) {
+          prompt += `\n\n--- ${doc.filename} ---\n${doc.content}`
+        }
+      }
+    }
+    prompt += '\n\n--- End of Context Info ---'
+  }
+
   prompt += '\n\nBe concise, helpful, and focused on helping the user accomplish this specific task. If they ask for help with something unrelated to the task, you can still assist but gently remind them of the task context.'
   return prompt
 }
@@ -89,12 +113,19 @@ export async function sendMessage(
 
   const attachments = getAttachmentsByTask(taskId)
 
+  // Get context info (contexts and their documents)
+  const taskContexts = getContextsByTask(taskId)
+  const contextInfos: ContextInfo[] = taskContexts.map(context => ({
+    context,
+    documents: getDocumentsByContext(context.id)
+  }))
+
   const client = getClient()
   const abortController = new AbortController()
   activeRequests.set(taskId, abortController)
 
   try {
-    const systemPrompt = buildSystemPrompt(task.name, task.description)
+    const systemPrompt = buildSystemPrompt(task.name, task.description, contextInfos)
     const messages = buildMessages(conversationHistory, attachments, userMessage)
 
     let fullResponse = ''

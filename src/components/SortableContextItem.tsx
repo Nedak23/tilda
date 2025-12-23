@@ -1,25 +1,23 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { TaskItem } from './TaskItem'
-import type { Task, Context } from '../types'
+import { ContextSidebarItem } from './ContextSidebarItem'
+import type { Context } from '../types'
 
-interface SortableTaskItemProps {
-  task: Task
+interface SortableContextItemProps {
+  context: Context
+  isActive: boolean
+  taskCount: number
   onSelect: () => void
-  onComplete: () => void
-  onOpenChat?: () => void
-  isSelected?: boolean
-  contexts?: Context[]
+  onDelete: () => void
 }
 
-export function SortableTaskItem({
-  task,
+export function SortableContextItem({
+  context,
+  isActive,
+  taskCount,
   onSelect,
-  onComplete,
-  onOpenChat,
-  isSelected,
-  contexts
-}: SortableTaskItemProps) {
+  onDelete
+}: SortableContextItemProps) {
   const {
     attributes,
     listeners,
@@ -27,7 +25,7 @@ export function SortableTaskItem({
     transform,
     transition,
     isDragging
-  } = useSortable({ id: task.id })
+  } = useSortable({ id: context.id })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -43,13 +41,12 @@ export function SortableTaskItem({
       {...attributes}
       {...listeners}
     >
-      <TaskItem
-        task={task}
+      <ContextSidebarItem
+        context={context}
+        isActive={isActive}
+        taskCount={taskCount}
         onSelect={onSelect}
-        onComplete={onComplete}
-        onOpenChat={onOpenChat}
-        isSelected={isSelected}
-        contexts={contexts}
+        onDelete={onDelete}
       />
     </div>
   )

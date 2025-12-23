@@ -1,5 +1,5 @@
 import { format, differenceInDays, startOfDay } from 'date-fns'
-import type { Task } from '../types'
+import type { Task, Context } from '../types'
 
 interface TaskItemProps {
   task: Task
@@ -8,6 +8,8 @@ interface TaskItemProps {
   onOpenChat?: () => void
   isSelected?: boolean
   showCompletionDate?: boolean
+  showDate?: boolean
+  contexts?: Context[]
 }
 
 export function TaskItem({
@@ -16,7 +18,9 @@ export function TaskItem({
   onComplete,
   onOpenChat,
   isSelected = false,
-  showCompletionDate = false
+  showCompletionDate = false,
+  showDate = false,
+  contexts = []
 }: TaskItemProps) {
   const handleCheckboxClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -115,6 +119,24 @@ export function TaskItem({
             <p className="text-xs text-text-tertiary mt-1">
               {format(new Date(task.completionDate), 'MMM d')}
             </p>
+          )}
+          {showDate && task.dateToWorkOn && task.status !== 'archived' && (
+            <p className="text-xs text-text-tertiary mt-1">
+              {format(new Date(task.dateToWorkOn), 'MMM d')}
+            </p>
+          )}
+          {/* Context badges */}
+          {contexts.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {contexts.map(context => (
+                <span
+                  key={context.id}
+                  className="inline-flex items-center px-1.5 py-0.5 text-xs bg-surface-tertiary text-text-secondary rounded"
+                >
+                  #{context.name}
+                </span>
+              ))}
+            </div>
           )}
         </div>
 

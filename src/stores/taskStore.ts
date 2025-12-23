@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Task, Message, Attachment, ViewType, CreateTaskInput, UpdateTaskInput, TildaMessage } from '../types'
+import type { Task, Message, Attachment, ViewType, CreateTaskInput, UpdateTaskInput, TildaMessage, Context, ContextDocument, CreateContextInput, UpdateContextInput } from '../types'
 
 interface TaskStore {
   // State
@@ -21,6 +21,11 @@ interface TaskStore {
   tildaMessages: TildaMessage[]
   isTildaPending: boolean
   tildaStreamingContent: string
+
+  // Context state
+  contexts: Context[]
+  contextDocumentsByContext: Record<string, ContextDocument[]>
+  taskContextsByTask: Record<string, string[]>
 
   // View actions
   setCurrentView: (view: ViewType) => void
@@ -55,6 +60,26 @@ interface TaskStore {
   loadTildaMessages: () => Promise<void>
   sendTildaMessage: (content: string) => Promise<void>
   clearTildaHistory: () => Promise<void>
+
+  // Context actions
+  loadContexts: () => Promise<void>
+  createContext: (input: CreateContextInput) => Promise<Context>
+  updateContext: (id: string, input: UpdateContextInput) => Promise<void>
+  deleteContext: (id: string) => Promise<void>
+  reorderContext: (id: string, newPosition: number) => Promise<void>
+
+  // Task-Context relationship actions
+  loadTaskContexts: (taskId: string) => Promise<void>
+  setTaskContexts: (taskId: string, contextIds: string[]) => Promise<void>
+
+  // Context document actions
+  loadContextDocuments: (contextId: string) => Promise<void>
+  addContextDocument: (contextId: string, file: File) => Promise<void>
+  removeContextDocument: (id: string, contextId: string) => Promise<void>
+
+  // Context helpers
+  getContextsForTask: (taskId: string) => Context[]
+  getContextById: (id: string) => Context | undefined
 }
 
 export const useTaskStore = create<TaskStore>((set, get) => ({
@@ -71,6 +96,9 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   tildaMessages: [],
   isTildaPending: false,
   tildaStreamingContent: '',
+  contexts: [],
+  contextDocumentsByContext: {},
+  taskContextsByTask: {},
 
   // View actions
   setCurrentView: (view) => {
@@ -446,5 +474,145 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       console.error('Failed to clear Tilda history:', error)
       set({ error: (error as Error).message })
     }
+  },
+
+  // Context actions
+  loadContexts: async () => {
+    try {
+      const contexts = await window.api.contexts.getAll()
+      set({ contexts })
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  createContext: async (input) => {
+    try {
+      const context = await window.api.contexts.create(input)
+      set(state => ({ contexts: [...state.contexts, context] }))
+      return context
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  updateContext: async (id, input) => {
+    try {
+      const updatedContext = await window.api.contexts.update(id, input)
+      set(state => ({
+        contexts: state.contexts.map(c => c.id === id ? updatedContext : c)
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  deleteContext: async (id) => {
+    try {
+      await window.api.contexts.delete(id)
+      set(state => ({
+        contexts: state.contexts.filter(c => c.id !== id),
+        currentView: state.currentView === `context:${id}` ? 'today' : state.currentView
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  reorderContext: async (id, newPosition) => {
+    try {
+      await window.api.contexts.reorder(id, newPosition)
+      // Reload contexts to get updated sort positions
+      await get().loadContexts()
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  // Task-Context relationship actions
+  loadTaskContexts: async (taskId) => {
+    try {
+      const contexts = await window.api.contexts.getTaskContexts(taskId)
+      set(state => ({
+        taskContextsByTask: { ...state.taskContextsByTask, [taskId]: contexts.map(c => c.id) }
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  setTaskContexts: async (taskId, contextIds) => {
+    try {
+      await window.api.contexts.setTaskContexts(taskId, contextIds)
+      set(state => ({
+        taskContextsByTask: { ...state.taskContextsByTask, [taskId]: contextIds }
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  // Context document actions
+  loadContextDocuments: async (contextId) => {
+    try {
+      const documents = await window.api.contextDocuments.getByContext(contextId)
+      set(state => ({
+        contextDocumentsByContext: { ...state.contextDocumentsByContext, [contextId]: documents }
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  addContextDocument: async (contextId, file) => {
+    try {
+      const content = await file.text()
+      const document = await window.api.contextDocuments.create(
+        contextId,
+        file.name,
+        content,
+        file.type || 'text/plain',
+        file.size
+      )
+      set(state => ({
+        contextDocumentsByContext: {
+          ...state.contextDocumentsByContext,
+          [contextId]: [...(state.contextDocumentsByContext[contextId] || []), document]
+        }
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  removeContextDocument: async (id, contextId) => {
+    try {
+      await window.api.contextDocuments.delete(id)
+      set(state => ({
+        contextDocumentsByContext: {
+          ...state.contextDocumentsByContext,
+          [contextId]: (state.contextDocumentsByContext[contextId] || []).filter(d => d.id !== id)
+        }
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  // Context helpers
+  getContextsForTask: (taskId) => {
+    const contextIds = get().taskContextsByTask[taskId] || []
+    return get().contexts.filter(c => contextIds.includes(c.id))
+  },
+
+  getContextById: (id) => {
+    return get().contexts.find(c => c.id === id)
   }
 }))

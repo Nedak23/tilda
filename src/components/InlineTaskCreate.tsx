@@ -5,10 +5,11 @@ import { useTaskStore } from '../stores/taskStore'
 interface InlineTaskCreateProps {
   onClose: () => void
   defaultDate?: string
+  defaultContextId?: string
 }
 
-export function InlineTaskCreate({ onClose, defaultDate }: InlineTaskCreateProps) {
-  const { createTask } = useTaskStore()
+export function InlineTaskCreate({ onClose, defaultDate, defaultContextId }: InlineTaskCreateProps) {
+  const { createTask, contexts, setTaskContexts } = useTaskStore()
   const today = format(new Date(), 'yyyy-MM-dd')
 
   const [name, setName] = useState('')
@@ -17,6 +18,8 @@ export function InlineTaskCreate({ onClose, defaultDate }: InlineTaskCreateProps
   const [deadline, setDeadline] = useState('')
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [showDeadlinePicker, setShowDeadlinePicker] = useState(false)
+  const [showContextPicker, setShowContextPicker] = useState(false)
+  const [selectedContextIds, setSelectedContextIds] = useState<string[]>(defaultContextId ? [defaultContextId] : [])
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -49,12 +52,16 @@ export function InlineTaskCreate({ onClose, defaultDate }: InlineTaskCreateProps
 
     setIsSubmitting(true)
     try {
-      await createTask({
+      const task = await createTask({
         name: name.trim(),
         dateToWorkOn,
         deadline: deadline || undefined,
         description: description.trim() || undefined
       })
+      // Assign contexts if any selected
+      if (selectedContextIds.length > 0 && task) {
+        await setTaskContexts(task.id, selectedContextIds)
+      }
       onClose()
     } catch (error) {
       console.error('Failed to create task:', error)
@@ -80,6 +87,14 @@ export function InlineTaskCreate({ onClose, defaultDate }: InlineTaskCreateProps
   const clearDeadline = () => {
     setDeadline('')
     setShowDeadlinePicker(false)
+  }
+
+  const handleToggleContext = (contextId: string) => {
+    setSelectedContextIds(prev =>
+      prev.includes(contextId)
+        ? prev.filter(id => id !== contextId)
+        : [...prev, contextId]
+    )
   }
 
   const isToday = dateToWorkOn === today
@@ -207,18 +222,49 @@ export function InlineTaskCreate({ onClose, defaultDate }: InlineTaskCreateProps
           )}
         </div>
 
-        {/* More options placeholder */}
-        <button
-          type="button"
-          className="p-1.5 rounded-md border border-border-light text-text-tertiary hover:text-text-secondary hover:border-border transition-colors"
-          title="More options"
-        >
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-            <circle cx="6" cy="12" r="1.5" />
-            <circle cx="12" cy="12" r="1.5" />
-            <circle cx="18" cy="12" r="1.5" />
-          </svg>
-        </button>
+        {/* Context picker button */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              setShowContextPicker(!showContextPicker)
+              setShowDatePicker(false)
+              setShowDeadlinePicker(false)
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm border transition-colors ${
+              selectedContextIds.length > 0
+                ? 'border-accent/50 text-accent'
+                : 'border-border-light text-text-tertiary hover:text-text-secondary hover:border-border'
+            }`}
+            title="Assign to contexts"
+          >
+            <span className="text-sm">#</span>
+            {selectedContextIds.length > 0 && (
+              <span>{selectedContextIds.length}</span>
+            )}
+          </button>
+          {showContextPicker && (
+            <div className="absolute top-full left-0 mt-1 bg-surface-elevated rounded-lg shadow-elevated p-2 z-10 min-w-[150px] max-h-48 overflow-y-auto">
+              {contexts.length === 0 ? (
+                <p className="text-xs text-text-tertiary italic px-2 py-1">No contexts created</p>
+              ) : (
+                contexts.map(context => (
+                  <label
+                    key={context.id}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-surface-tertiary cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedContextIds.includes(context.id)}
+                      onChange={() => handleToggleContext(context.id)}
+                      className="rounded border-border-light text-accent focus:ring-accent"
+                    />
+                    <span className="text-sm text-text">#{context.name}</span>
+                  </label>
+                ))
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Spacer */}
         <div className="flex-1" />
