@@ -115,6 +115,21 @@ export interface TildaMessage {
   timestamp: string
 }
 
+export interface TildaAttachment {
+  id: string
+  filename: string
+  content: string
+  mimeType: string
+  createdAt: string
+}
+
+export interface TildaAttachmentsAPI {
+  getAll: () => Promise<TildaAttachment[]>
+  create: (filename: string, content: string, mimeType: string) => Promise<TildaAttachment>
+  delete: (id: string) => Promise<void>
+  clear: () => Promise<void>
+}
+
 export interface TildaAPI {
   getMessages: () => Promise<TildaMessage[]>
   sendMessage: (
@@ -216,6 +231,7 @@ export interface ElectronAPI {
   llm: LLMAPI
   settings: SettingsAPI
   tilda: TildaAPI
+  tildaAttachments: TildaAttachmentsAPI
   contexts: ContextsAPI
   contextDocuments: ContextDocumentsAPI
   aiNotes: AINotesAPI

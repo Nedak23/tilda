@@ -73,6 +73,13 @@ const api: ElectronAPI = {
     cancelRequest: () => ipcRenderer.send('tilda:cancel'),
     clearHistory: () => ipcRenderer.invoke('tilda:clearHistory')
   },
+  tildaAttachments: {
+    getAll: () => ipcRenderer.invoke('tildaAttachments:getAll'),
+    create: (filename: string, content: string, mimeType: string) =>
+      ipcRenderer.invoke('tildaAttachments:create', filename, content, mimeType),
+    delete: (id: string) => ipcRenderer.invoke('tildaAttachments:delete', id),
+    clear: () => ipcRenderer.invoke('tildaAttachments:clear')
+  },
   contexts: {
     getAll: () => ipcRenderer.invoke('contexts:getAll'),
     getById: (id: string) => ipcRenderer.invoke('contexts:getById', id),

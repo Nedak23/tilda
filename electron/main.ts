@@ -23,6 +23,10 @@ import {
   setUnreadAgentMessage,
   getTildaMessages,
   clearTildaMessages,
+  getTildaAttachments,
+  createTildaAttachment,
+  deleteTildaAttachment,
+  clearTildaAttachments,
   getAllContexts,
   getContextById,
   createContext,
@@ -214,11 +218,29 @@ ipcMain.on('tilda:cancel', () => {
 ipcMain.handle('tilda:clearHistory', async () => {
   try {
     clearTildaMessages()
+    clearTildaAttachments()
     return { success: true }
   } catch (error) {
     console.error('Failed to clear Tilda history:', error)
     throw error
   }
+})
+
+// IPC Handlers for Tilda Attachments
+ipcMain.handle('tildaAttachments:getAll', () => {
+  return getTildaAttachments()
+})
+
+ipcMain.handle('tildaAttachments:create', (_event, filename: string, content: string, mimeType: string) => {
+  return createTildaAttachment(filename, content, mimeType)
+})
+
+ipcMain.handle('tildaAttachments:delete', (_event, id: string) => {
+  deleteTildaAttachment(id)
+})
+
+ipcMain.handle('tildaAttachments:clear', () => {
+  clearTildaAttachments()
 })
 
 // IPC Handlers for Contexts

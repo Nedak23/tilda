@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { format } from 'date-fns'
 import { useTaskStore } from '../stores/taskStore'
+import { isFileSupported, FILE_INPUT_ACCEPT } from '../utils/fileUtils'
 import type { TildaMessage } from '../types'
 
 interface TildaSidebarProps {
@@ -44,22 +45,28 @@ export function TildaSidebar({ isOpen, onClose }: TildaSidebarProps) {
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const {
     tildaMessages,
+    tildaAttachments,
     isTildaPending,
     tildaStreamingContent,
     loadTildaMessages,
+    loadTildaAttachments,
     sendTildaMessage,
-    clearTildaHistory
+    clearTildaHistory,
+    addTildaAttachment,
+    removeTildaAttachment
   } = useTaskStore()
 
-  // Load messages when sidebar opens
+  // Load messages and attachments when sidebar opens
   useEffect(() => {
     if (isOpen) {
       loadTildaMessages()
+      loadTildaAttachments()
     }
-  }, [isOpen, loadTildaMessages])
+  }, [isOpen, loadTildaMessages, loadTildaAttachments])
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -87,6 +94,21 @@ export function TildaSidebar({ isOpen, onClose }: TildaSidebarProps) {
       e.preventDefault()
       handleSubmit()
     }
+  }
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files?.length) return
+
+    for (const file of files) {
+      if (!isFileSupported(file)) {
+        console.warn(`Skipping unsupported file: ${file.name}`)
+        continue
+      }
+      await addTildaAttachment(file)
+    }
+
+    e.target.value = ''
   }
 
   return (
@@ -172,9 +194,50 @@ export function TildaSidebar({ isOpen, onClose }: TildaSidebarProps) {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Attachments */}
+      {tildaAttachments.length > 0 && (
+        <div className="flex-shrink-0 px-3 pb-2 border-t border-border-light pt-2">
+          <div className="flex flex-wrap gap-1.5">
+            {tildaAttachments.map(attachment => (
+              <div
+                key={attachment.id}
+                className="flex items-center gap-1.5 px-2 py-1 bg-surface-tertiary rounded text-xs text-text-secondary"
+              >
+                <span className="truncate max-w-[100px]">{attachment.filename}</span>
+                <button
+                  onClick={() => removeTildaAttachment(attachment.id)}
+                  className="text-text-tertiary hover:text-error transition-colors"
+                  aria-label="Remove attachment"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Input */}
-      <div className="flex-shrink-0 p-3 border-t border-border-light">
+      <div className={`flex-shrink-0 p-3 ${tildaAttachments.length === 0 ? 'border-t border-border-light' : ''}`}>
         <div className="flex items-end gap-2">
+          {/* Attach button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="p-2 text-text-tertiary hover:text-text-secondary rounded-lg transition-colors"
+            title="Attach file"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+            </svg>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={FILE_INPUT_ACCEPT}
+            multiple
+            onChange={handleFileSelect}
+            className="hidden"
+          />
           <textarea
             ref={textareaRef}
             value={input}
