@@ -4,7 +4,6 @@ import {
   createTildaMessage,
   createTask,
   updateTask,
-  completeTask,
   reopenTask,
   deleteTask,
   searchTasks,
@@ -12,10 +11,13 @@ import {
   createContext,
   setTaskContexts,
   getContextsByTask,
+  createAILearningNote,
+  GENERAL_CONTEXT_ID,
   type SearchTasksCriteria
 } from './database'
+import { completeTaskWithLearning } from './learning-check'
 import { getApiKey, getModel } from './settings'
-import type { TildaMessage, CreateTaskInput, UpdateTaskInput } from '../src/types'
+import type { TildaMessage, CreateTaskInput, UpdateTaskInput, AILearningNoteCategory } from '../src/types'
 
 let anthropic: Anthropic | null = null
 let currentApiKey: string | null = null
@@ -53,6 +55,7 @@ You have access to tools for task management:
 - search_tasks: Find tasks by status, date range, text search, or context
 - create_context: Create a new organizational context
 - list_contexts: Show all available contexts
+- save_learning_note: Save useful information you learn about user preferences, domain knowledge, workflows, or technical decisions to a context for future reference
 
 When users ask about their tasks or want to manage them, use the appropriate tools. Be proactive in suggesting task organization and time management strategies.
 
@@ -66,7 +69,8 @@ Guidelines:
 - Provide task summaries when users ask about their tasks
 - Suggest using contexts to organize related tasks (e.g., work, personal, projects)
 - Suggest next steps when appropriate
-- If a task operation fails, explain what went wrong`
+- If a task operation fails, explain what went wrong
+- When you learn something useful about the user's preferences, domain, workflow, or technical decisions that would help with future tasks, use save_learning_note to remember it`
 
 const TILDA_TOOLS: Anthropic.Tool[] = [
   {
@@ -248,6 +252,33 @@ const TILDA_TOOLS: Anthropic.Tool[] = [
       type: 'object' as const,
       properties: {}
     }
+  },
+  {
+    name: 'save_learning_note',
+    description: 'Save a learning note with useful information discovered during conversations. Use this to capture user preferences, domain knowledge, workflow patterns, or technical decisions that should be remembered for future reference.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        title: {
+          type: 'string',
+          description: 'A concise title for the learning note (1-10 words)'
+        },
+        content: {
+          type: 'string',
+          description: 'The detailed content of the learning note. Should be specific, actionable, and useful for future tasks.'
+        },
+        category: {
+          type: 'string',
+          enum: ['preference', 'domain_knowledge', 'workflow', 'technical_decision'],
+          description: 'The type of learning: preference (user likes/dislikes), domain_knowledge (project/field info), workflow (how things are done), technical_decision (architectural choices)'
+        },
+        contextId: {
+          type: 'string',
+          description: 'The ID of the context to save this note to. Use list_contexts to find available contexts. Use "general" for general information.'
+        }
+      },
+      required: ['title', 'content', 'category', 'contextId']
+    }
   }
 ]
 
@@ -267,6 +298,10 @@ interface ToolInput {
   dateTo?: string
   contextIds?: string[]
   contextId?: string
+  // For save_learning_note
+  title?: string
+  content?: string
+  category?: AILearningNoteCategory
 }
 
 function executeToolCall(toolName: string, toolInput: ToolInput): string {
@@ -326,16 +361,33 @@ function executeToolCall(toolName: string, toolInput: ToolInput): string {
       }
 
       case 'complete_task': {
-        const task = completeTask(toolInput.taskId!)
-        return JSON.stringify({
-          success: true,
-          message: `Completed task "${task.name}"`,
-          task: {
-            id: task.id,
-            name: task.name,
-            completionDate: task.completionDate
-          }
-        })
+        try {
+          const { task, learningCheckPromise } = completeTaskWithLearning(toolInput.taskId!)
+
+          // Trigger learning check asynchronously
+          learningCheckPromise
+            .then(result => {
+              if (result.noteSaved && result.note) {
+                console.log(`Learning note saved from Tilda: "${result.note.title}"`)
+              }
+            })
+            .catch(err => console.error('Learning check error from Tilda:', err))
+
+          return JSON.stringify({
+            success: true,
+            message: `Completed task "${task.name}"`,
+            task: {
+              id: task.id,
+              name: task.name,
+              completionDate: task.completionDate
+            }
+          })
+        } catch (error) {
+          return JSON.stringify({
+            success: false,
+            error: (error as Error).message
+          })
+        }
       }
 
       case 'reopen_task': {
@@ -413,6 +465,26 @@ function executeToolCall(toolName: string, toolInput: ToolInput): string {
             name: c.name,
             description: c.description
           }))
+        })
+      }
+
+      case 'save_learning_note': {
+        const note = createAILearningNote({
+          contextId: toolInput.contextId || GENERAL_CONTEXT_ID,
+          title: toolInput.title!,
+          content: toolInput.content!,
+          category: toolInput.category!
+        })
+        const context = getAllContexts().find(c => c.id === note.contextId)
+        return JSON.stringify({
+          success: true,
+          message: `Saved learning note "${note.title}" to context "${context?.name || 'General'}"`,
+          note: {
+            id: note.id,
+            title: note.title,
+            category: note.category,
+            contextName: context?.name || 'General'
+          }
         })
       }
 

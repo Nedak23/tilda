@@ -6,7 +6,10 @@ import type {
   ElectronAPI,
   Settings,
   CreateContextInput,
-  UpdateContextInput
+  UpdateContextInput,
+  CreateAILearningNoteInput,
+  UpdateAILearningNoteInput,
+  AILearningNote
 } from '../src/types'
 
 const api: ElectronAPI = {
@@ -86,6 +89,19 @@ const api: ElectronAPI = {
     create: (contextId: string, filename: string, content: string, mimeType: string, fileSize: number) =>
       ipcRenderer.invoke('contextDocuments:create', contextId, filename, content, mimeType, fileSize),
     delete: (id: string) => ipcRenderer.invoke('contextDocuments:delete', id)
+  },
+  aiNotes: {
+    getByContext: (contextId: string) => ipcRenderer.invoke('aiNotes:getByContext', contextId),
+    getAll: () => ipcRenderer.invoke('aiNotes:getAll'),
+    create: (input: CreateAILearningNoteInput) => ipcRenderer.invoke('aiNotes:create', input),
+    update: (id: string, input: UpdateAILearningNoteInput) => ipcRenderer.invoke('aiNotes:update', id, input),
+    delete: (id: string) => ipcRenderer.invoke('aiNotes:delete', id),
+    onNoteSaved: (callback: (note: AILearningNote) => void) => {
+      const listener = (_event: unknown, note: AILearningNote) => callback(note)
+      ipcRenderer.on('ai-note:saved', listener)
+      // Return unsubscribe function
+      return () => ipcRenderer.removeListener('ai-note:saved', listener)
+    }
   }
 }
 

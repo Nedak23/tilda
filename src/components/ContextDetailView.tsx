@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useTaskStore } from '../stores/taskStore'
 import { ContextDocumentList } from './ContextDocumentList'
+import { AILearningNotesList } from './AILearningNotesList'
+import { AILearningNoteEditor } from './AILearningNoteEditor'
 import { TaskItem } from './TaskItem'
-import type { Task } from '../types'
+import type { Task, AILearningNote } from '../types'
 
 interface ContextDetailViewProps {
   contextId: string
@@ -16,23 +18,30 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
     tasks,
     taskContextsByTask,
     contextDocumentsByContext,
+    aiNotesByContext,
     updateContext,
     loadContextDocuments,
     addContextDocument,
     removeContextDocument,
-    loadTaskContexts
+    loadTaskContexts,
+    loadAINotes,
+    updateAINote,
+    deleteAINote
   } = useTaskStore()
 
   const [isEditingDescription, setIsEditingDescription] = useState(false)
   const [descriptionDraft, setDescriptionDraft] = useState('')
+  const [editingNote, setEditingNote] = useState<AILearningNote | null>(null)
 
   const context = contexts.find(c => c.id === contextId)
   const documents = contextDocumentsByContext[contextId] || []
+  const aiNotes = aiNotesByContext[contextId] || []
 
-  // Load context documents on mount
+  // Load context documents and AI notes on mount
   useEffect(() => {
     loadContextDocuments(contextId)
-  }, [contextId, loadContextDocuments])
+    loadAINotes(contextId)
+  }, [contextId, loadContextDocuments, loadAINotes])
 
   // Load task contexts for all tasks in this context
   useEffect(() => {
@@ -90,6 +99,26 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
       await removeContextDocument(id, contextId)
     } catch (error) {
       console.error('Failed to delete document:', error)
+    }
+  }
+
+  const handleEditAINote = (note: AILearningNote) => {
+    setEditingNote(note)
+  }
+
+  const handleSaveAINote = async (id: string, input: Parameters<typeof updateAINote>[2]) => {
+    try {
+      await updateAINote(id, contextId, input)
+    } catch (error) {
+      console.error('Failed to update AI note:', error)
+    }
+  }
+
+  const handleDeleteAINote = async (id: string) => {
+    try {
+      await deleteAINote(id, contextId)
+    } catch (error) {
+      console.error('Failed to delete AI note:', error)
     }
   }
 
@@ -158,6 +187,13 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
             onDelete={handleDeleteDocument}
           />
 
+          {/* AI Learning Notes section */}
+          <AILearningNotesList
+            notes={aiNotes}
+            onEdit={handleEditAINote}
+            onDelete={handleDeleteAINote}
+          />
+
           {/* Tasks section */}
           <div>
             <h2 className="text-sm font-medium text-text-secondary mb-2">
@@ -183,6 +219,14 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
           </div>
         </div>
       </div>
+
+      {/* AI Note Editor Modal */}
+      <AILearningNoteEditor
+        note={editingNote}
+        isOpen={editingNote !== null}
+        onClose={() => setEditingNote(null)}
+        onSave={handleSaveAINote}
+      />
     </div>
   )
 }

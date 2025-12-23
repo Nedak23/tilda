@@ -1,7 +1,11 @@
+// Fixed ID for the General context
+export const GENERAL_CONTEXT_ID = 'general'
+
 export type TaskStatus = 'upcoming' | 'today' | 'archived'
 export type MessageSender = 'user' | 'agent'
 export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly'
 export type ModelType = 'claude-sonnet-4-5-20250929' | 'claude-haiku-4-5-20251001' | 'claude-opus-4-5-20251101'
+export type AILearningNoteCategory = 'preference' | 'domain_knowledge' | 'workflow' | 'technical_decision'
 
 export interface Settings {
   apiKey: string
@@ -168,6 +172,43 @@ export interface ContextDocumentsAPI {
   delete: (id: string) => Promise<void>
 }
 
+// AI Learning Notes types
+export interface AILearningNote {
+  id: string
+  contextId: string
+  title: string
+  content: string
+  category: AILearningNoteCategory
+  sourceTaskId: string | null
+  sourceTaskName: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateAILearningNoteInput {
+  contextId: string
+  title: string
+  content: string
+  category: AILearningNoteCategory
+  sourceTaskId?: string
+  sourceTaskName?: string
+}
+
+export interface UpdateAILearningNoteInput {
+  title?: string
+  content?: string
+  category?: AILearningNoteCategory
+}
+
+export interface AINotesAPI {
+  getByContext: (contextId: string) => Promise<AILearningNote[]>
+  getAll: () => Promise<AILearningNote[]>
+  create: (input: CreateAILearningNoteInput) => Promise<AILearningNote>
+  update: (id: string, input: UpdateAILearningNoteInput) => Promise<AILearningNote>
+  delete: (id: string) => Promise<void>
+  onNoteSaved: (callback: (note: AILearningNote) => void) => () => void
+}
+
 export interface ElectronAPI {
   tasks: TasksAPI
   messages: MessagesAPI
@@ -177,6 +218,7 @@ export interface ElectronAPI {
   tilda: TildaAPI
   contexts: ContextsAPI
   contextDocuments: ContextDocumentsAPI
+  aiNotes: AINotesAPI
 }
 
 declare global {

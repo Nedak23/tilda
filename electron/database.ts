@@ -2,20 +2,27 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
-import type {
-  Task,
-  Message,
-  Attachment,
-  CreateTaskInput,
-  UpdateTaskInput,
-  MessageSender,
-  RecurrenceRule,
-  TildaMessage,
-  Context,
-  ContextDocument,
-  CreateContextInput,
-  UpdateContextInput
+import {
+  GENERAL_CONTEXT_ID,
+  type Task,
+  type Message,
+  type Attachment,
+  type CreateTaskInput,
+  type UpdateTaskInput,
+  type MessageSender,
+  type RecurrenceRule,
+  type TildaMessage,
+  type Context,
+  type ContextDocument,
+  type CreateContextInput,
+  type UpdateContextInput,
+  type AILearningNote,
+  type CreateAILearningNoteInput,
+  type UpdateAILearningNoteInput
 } from '../src/types'
+
+// Re-export for convenience
+export { GENERAL_CONTEXT_ID }
 
 let db: Database.Database
 
@@ -113,7 +120,43 @@ export function initDatabase(): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_context_documents_context ON context_documents(context_id);
+
+    CREATE TABLE IF NOT EXISTS ai_learning_notes (
+      id TEXT PRIMARY KEY,
+      context_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      category TEXT CHECK(category IN ('preference', 'domain_knowledge', 'workflow', 'technical_decision')) NOT NULL,
+      source_task_id TEXT,
+      source_task_name TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (context_id) REFERENCES contexts(id) ON DELETE CASCADE,
+      FOREIGN KEY (source_task_id) REFERENCES tasks(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ai_learning_notes_context ON ai_learning_notes(context_id);
   `)
+
+  // Ensure the General context exists
+  ensureGeneralContext()
+}
+
+function ensureGeneralContext(): void {
+  const existing = db.prepare('SELECT id FROM contexts WHERE id = ?').get(GENERAL_CONTEXT_ID)
+  if (!existing) {
+    const now = new Date().toISOString()
+    db.prepare(`
+      INSERT INTO contexts (id, name, description, sort_position, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      GENERAL_CONTEXT_ID,
+      'General',
+      'Default context for all tasks. AI learning notes without a specific context are saved here.',
+      -1, // Ensure it appears first
+      now
+    )
+  }
 }
 
 export function closeDatabase(): void {
@@ -752,4 +795,89 @@ export function createContextDocument(
 
 export function deleteContextDocument(id: string): void {
   db.prepare('DELETE FROM context_documents WHERE id = ?').run(id)
+}
+
+// AI Learning Notes operations
+
+function rowToAILearningNote(row: Record<string, unknown>): AILearningNote {
+  return {
+    id: row.id as string,
+    contextId: row.context_id as string,
+    title: row.title as string,
+    content: row.content as string,
+    category: row.category as AILearningNote['category'],
+    sourceTaskId: row.source_task_id as string | null,
+    sourceTaskName: row.source_task_name as string | null,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string
+  }
+}
+
+export function getAILearningNotesByContext(contextId: string): AILearningNote[] {
+  const rows = db.prepare(
+    'SELECT * FROM ai_learning_notes WHERE context_id = ? ORDER BY created_at DESC'
+  ).all(contextId)
+  return rows.map(row => rowToAILearningNote(row as Record<string, unknown>))
+}
+
+export function getAllAILearningNotes(): AILearningNote[] {
+  const rows = db.prepare('SELECT * FROM ai_learning_notes ORDER BY created_at DESC').all()
+  return rows.map(row => rowToAILearningNote(row as Record<string, unknown>))
+}
+
+export function getAILearningNoteById(id: string): AILearningNote | undefined {
+  const row = db.prepare('SELECT * FROM ai_learning_notes WHERE id = ?').get(id)
+  return row ? rowToAILearningNote(row as Record<string, unknown>) : undefined
+}
+
+export function createAILearningNote(input: CreateAILearningNoteInput): AILearningNote {
+  const id = uuidv4()
+  const now = new Date().toISOString()
+
+  db.prepare(`
+    INSERT INTO ai_learning_notes (id, context_id, title, content, category, source_task_id, source_task_name, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    input.contextId,
+    input.title,
+    input.content,
+    input.category,
+    input.sourceTaskId ?? null,
+    input.sourceTaskName ?? null,
+    now,
+    now
+  )
+
+  return getAILearningNoteById(id)!
+}
+
+export function updateAILearningNote(id: string, input: UpdateAILearningNoteInput): AILearningNote {
+  const note = getAILearningNoteById(id)
+  if (!note) throw new Error(`AI Learning Note ${id} not found`)
+
+  const updates: string[] = ['updated_at = ?']
+  const values: unknown[] = [new Date().toISOString()]
+
+  if (input.title !== undefined) {
+    updates.push('title = ?')
+    values.push(input.title)
+  }
+  if (input.content !== undefined) {
+    updates.push('content = ?')
+    values.push(input.content)
+  }
+  if (input.category !== undefined) {
+    updates.push('category = ?')
+    values.push(input.category)
+  }
+
+  values.push(id)
+  db.prepare(`UPDATE ai_learning_notes SET ${updates.join(', ')} WHERE id = ?`).run(...values)
+
+  return getAILearningNoteById(id)!
+}
+
+export function deleteAILearningNote(id: string): void {
+  db.prepare('DELETE FROM ai_learning_notes WHERE id = ?').run(id)
 }

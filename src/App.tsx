@@ -9,6 +9,7 @@ import { SettingsModal } from './components/SettingsModal'
 import { TildaToggleButton } from './components/TildaToggleButton'
 import { TildaSidebar } from './components/TildaSidebar'
 import { ContextDetailView } from './components/ContextDetailView'
+import type { AILearningNote } from './types'
 
 function App() {
   const {
@@ -30,11 +31,25 @@ function App() {
   const [isCreatingTask, setIsCreatingTask] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isTildaOpen, setIsTildaOpen] = useState(false)
+  const [notification, setNotification] = useState<{ message: string; contextId: string } | null>(null)
 
   useEffect(() => {
     loadTasks()
     loadContexts()
   }, [loadTasks, loadContexts])
+
+  // Listen for AI note saved events
+  useEffect(() => {
+    const unsubscribe = window.api.aiNotes.onNoteSaved((note: AILearningNote) => {
+      setNotification({
+        message: `AI saved a learning note: "${note.title}"`,
+        contextId: note.contextId
+      })
+      // Auto-dismiss after 5 seconds
+      setTimeout(() => setNotification(null), 5000)
+    })
+    return unsubscribe
+  }, [])
 
   // Load task contexts for all tasks
   useEffect(() => {
@@ -212,6 +227,22 @@ function App() {
         isOpen={isTildaOpen}
         onClose={() => setIsTildaOpen(false)}
       />
+
+      {/* AI Note Saved Notification */}
+      {notification && (
+        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 px-4 py-3 bg-surface-secondary border border-border-light rounded-lg shadow-xl animate-slide-up">
+          <span className="text-lg">🤖</span>
+          <span className="text-sm text-text">{notification.message}</span>
+          <button
+            onClick={() => setNotification(null)}
+            className="p-1 text-text-secondary hover:text-text"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   )
 }
