@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { getTaskById, getMessagesByTask, getAttachmentsByTask, createMessage, setUnreadAgentMessage, getContextsByTask, getDocumentsByContext } from './database'
+import { getTaskById, getMessagesByTask, getAttachmentsByTask, createMessage, setUnreadAgentMessage, getContextsByTask, getDocumentsByContext, getAILearningNotesByContext, getContextById, GENERAL_CONTEXT_ID } from './database'
 import { getApiKey, getModel } from './settings'
-import type { Message, Attachment, Context, ContextDocument } from '../src/types'
+import type { Message, Attachment, Context, ContextDocument, AILearningNote } from '../src/types'
 
 let anthropic: Anthropic | null = null
 let currentApiKey: string | null = null
@@ -27,6 +27,17 @@ const activeRequests = new Map<string, AbortController>()
 interface ContextInfo {
   context: Context
   documents: ContextDocument[]
+  learningNotes: AILearningNote[]
+}
+
+function formatCategory(category: string): string {
+  const categoryLabels: Record<string, string> = {
+    'preference': 'PREFERENCE',
+    'domain_knowledge': 'DOMAIN KNOWLEDGE',
+    'workflow': 'WORKFLOW',
+    'technical_decision': 'TECHNICAL DECISION'
+  }
+  return categoryLabels[category] || category.toUpperCase()
 }
 
 function buildSystemPrompt(taskName: string, description?: string, contextInfos?: ContextInfo[]): string {
@@ -38,7 +49,7 @@ function buildSystemPrompt(taskName: string, description?: string, contextInfos?
   // Add context info if available
   if (contextInfos && contextInfos.length > 0) {
     prompt += '\n\n--- Task Contexts ---'
-    for (const { context, documents } of contextInfos) {
+    for (const { context, documents, learningNotes } of contextInfos) {
       prompt += `\n\nContext: ${context.name}`
       if (context.description) {
         prompt += `\nDescription: ${context.description}`
@@ -47,6 +58,13 @@ function buildSystemPrompt(taskName: string, description?: string, contextInfos?
         prompt += '\n\nContext Documents:'
         for (const doc of documents) {
           prompt += `\n\n--- ${doc.filename} ---\n${doc.content}`
+        }
+      }
+      // Add AI learning notes
+      if (learningNotes.length > 0) {
+        prompt += '\n\nLearned Information (from previous tasks):'
+        for (const note of learningNotes) {
+          prompt += `\n\n[${formatCategory(note.category)}] ${note.title}:\n${note.content}`
         }
       }
     }
@@ -113,11 +131,20 @@ export async function sendMessage(
 
   const attachments = getAttachmentsByTask(taskId)
 
-  // Get context info (contexts and their documents)
+  // Get context info (contexts, their documents, and learning notes)
   const taskContexts = getContextsByTask(taskId)
-  const contextInfos: ContextInfo[] = taskContexts.map(context => ({
+
+  // Always include General context for its learning notes
+  const generalContext = getContextById(GENERAL_CONTEXT_ID)
+  const allContexts = [...taskContexts]
+  if (generalContext && !taskContexts.some(c => c.id === GENERAL_CONTEXT_ID)) {
+    allContexts.push(generalContext)
+  }
+
+  const contextInfos: ContextInfo[] = allContexts.map(context => ({
     context,
-    documents: getDocumentsByContext(context.id)
+    documents: getDocumentsByContext(context.id),
+    learningNotes: getAILearningNotesByContext(context.id)
   }))
 
   const client = getClient()

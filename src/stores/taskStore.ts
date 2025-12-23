@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Task, Message, Attachment, ViewType, CreateTaskInput, UpdateTaskInput, TildaMessage, Context, ContextDocument, CreateContextInput, UpdateContextInput } from '../types'
+import type { Task, Message, Attachment, ViewType, CreateTaskInput, UpdateTaskInput, TildaMessage, Context, ContextDocument, CreateContextInput, UpdateContextInput, AILearningNote, UpdateAILearningNoteInput } from '../types'
 
 interface TaskStore {
   // State
@@ -26,6 +26,9 @@ interface TaskStore {
   contexts: Context[]
   contextDocumentsByContext: Record<string, ContextDocument[]>
   taskContextsByTask: Record<string, string[]>
+
+  // AI Learning Notes state
+  aiNotesByContext: Record<string, AILearningNote[]>
 
   // View actions
   setCurrentView: (view: ViewType) => void
@@ -80,6 +83,11 @@ interface TaskStore {
   // Context helpers
   getContextsForTask: (taskId: string) => Context[]
   getContextById: (id: string) => Context | undefined
+
+  // AI Learning Notes actions
+  loadAINotes: (contextId: string) => Promise<void>
+  updateAINote: (id: string, contextId: string, input: UpdateAILearningNoteInput) => Promise<void>
+  deleteAINote: (id: string, contextId: string) => Promise<void>
 }
 
 export const useTaskStore = create<TaskStore>((set, get) => ({
@@ -99,6 +107,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   contexts: [],
   contextDocumentsByContext: {},
   taskContextsByTask: {},
+  aiNotesByContext: {},
 
   // View actions
   setCurrentView: (view) => {
@@ -614,5 +623,49 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
   getContextById: (id) => {
     return get().contexts.find(c => c.id === id)
+  },
+
+  // AI Learning Notes actions
+  loadAINotes: async (contextId) => {
+    try {
+      const notes = await window.api.aiNotes.getByContext(contextId)
+      set(state => ({
+        aiNotesByContext: { ...state.aiNotesByContext, [contextId]: notes }
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  updateAINote: async (id, contextId, input) => {
+    try {
+      const updatedNote = await window.api.aiNotes.update(id, input)
+      set(state => ({
+        aiNotesByContext: {
+          ...state.aiNotesByContext,
+          [contextId]: (state.aiNotesByContext[contextId] || []).map(n =>
+            n.id === id ? updatedNote : n
+          )
+        }
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  deleteAINote: async (id, contextId) => {
+    try {
+      await window.api.aiNotes.delete(id)
+      set(state => ({
+        aiNotesByContext: {
+          ...state.aiNotesByContext,
+          [contextId]: (state.aiNotesByContext[contextId] || []).filter(n => n.id !== id)
+        }
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
   }
 }))

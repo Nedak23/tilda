@@ -10,7 +10,6 @@ import {
   getAllTasks,
   createTask,
   updateTask,
-  completeTask,
   reopenTask,
   deleteTask,
   reorderTask,
@@ -35,12 +34,18 @@ import {
   getTasksByContext,
   getDocumentsByContext,
   createContextDocument,
-  deleteContextDocument
+  deleteContextDocument,
+  getAILearningNotesByContext,
+  getAllAILearningNotes,
+  createAILearningNote,
+  updateAILearningNote,
+  deleteAILearningNote
 } from './database'
+import { completeTaskWithLearning } from './learning-check'
 import { sendMessage, cancelRequest } from './llm'
 import { sendTildaMessage, cancelTildaRequest } from './tilda'
 import { getSettings, saveSettings, type Settings } from './settings'
-import type { CreateTaskInput, UpdateTaskInput, MessageSender, CreateContextInput, UpdateContextInput } from '../src/types'
+import type { CreateTaskInput, UpdateTaskInput, MessageSender, CreateContextInput, UpdateContextInput, CreateAILearningNoteInput, UpdateAILearningNoteInput } from '../src/types'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -89,8 +94,20 @@ ipcMain.handle('tasks:update', (_event, id: string, input: UpdateTaskInput) => {
   return updateTask(id, input)
 })
 
-ipcMain.handle('tasks:complete', (_event, id: string) => {
-  return completeTask(id)
+ipcMain.handle('tasks:complete', async (_event, id: string) => {
+  const { task, learningCheckPromise } = completeTaskWithLearning(id)
+
+  // Handle learning check result asynchronously (don't block completion)
+  learningCheckPromise
+    .then(result => {
+      if (result.noteSaved && result.note && mainWindow) {
+        // Notify renderer about saved note
+        mainWindow.webContents.send('ai-note:saved', result.note)
+      }
+    })
+    .catch(err => console.error('Learning check error:', err))
+
+  return task
 })
 
 ipcMain.handle('tasks:reopen', (_event, id: string) => {
@@ -252,6 +269,27 @@ ipcMain.handle('contextDocuments:create', (_event, contextId: string, filename: 
 
 ipcMain.handle('contextDocuments:delete', (_event, id: string) => {
   deleteContextDocument(id)
+})
+
+// IPC Handlers for AI Learning Notes
+ipcMain.handle('aiNotes:getByContext', (_event, contextId: string) => {
+  return getAILearningNotesByContext(contextId)
+})
+
+ipcMain.handle('aiNotes:getAll', () => {
+  return getAllAILearningNotes()
+})
+
+ipcMain.handle('aiNotes:create', (_event, input: CreateAILearningNoteInput) => {
+  return createAILearningNote(input)
+})
+
+ipcMain.handle('aiNotes:update', (_event, id: string, input: UpdateAILearningNoteInput) => {
+  return updateAILearningNote(id, input)
+})
+
+ipcMain.handle('aiNotes:delete', (_event, id: string) => {
+  deleteAILearningNote(id)
 })
 
 // App lifecycle
