@@ -8,6 +8,7 @@ interface SortableTaskItemProps {
   onSelect: () => void
   onComplete: () => void
   onOpenChat?: () => void
+  onDateChange?: (date: string) => void
   isSelected?: boolean
   contexts?: Context[]
 }
@@ -17,6 +18,7 @@ export function SortableTaskItem({
   onSelect,
   onComplete,
   onOpenChat,
+  onDateChange,
   isSelected,
   contexts
 }: SortableTaskItemProps) {
@@ -48,6 +50,7 @@ export function SortableTaskItem({
         onSelect={onSelect}
         onComplete={onComplete}
         onOpenChat={onOpenChat}
+        onDateChange={onDateChange}
         isSelected={isSelected}
         contexts={contexts}
       />

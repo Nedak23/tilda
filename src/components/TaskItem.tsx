@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react'
 import { format, differenceInDays, startOfDay } from 'date-fns'
 import type { Task, Context } from '../types'
 
@@ -6,6 +7,7 @@ interface TaskItemProps {
   onSelect: () => void
   onComplete: () => void
   onOpenChat?: () => void
+  onDateChange?: (date: string) => void
   isSelected?: boolean
   showCompletionDate?: boolean
   showDate?: boolean
@@ -17,11 +19,15 @@ export function TaskItem({
   onSelect,
   onComplete,
   onOpenChat,
+  onDateChange,
   isSelected = false,
   showCompletionDate = false,
   showDate = false,
   contexts = []
 }: TaskItemProps) {
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const datePickerRef = useRef<HTMLDivElement>(null)
+
   const handleCheckboxClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     onComplete()
@@ -31,6 +37,34 @@ export function TaskItem({
     e.stopPropagation()
     onOpenChat?.()
   }
+
+  const handleCalendarClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setShowDatePicker(!showDatePicker)
+  }
+
+  const handleDateSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation()
+    onDateChange?.(e.target.value)
+    setShowDatePicker(false)
+  }
+
+  // Close date picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
+        setShowDatePicker(false)
+      }
+    }
+
+    if (showDatePicker) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showDatePicker])
 
   return (
     <div
@@ -153,7 +187,7 @@ export function TaskItem({
           {onOpenChat && (
             <button
               onClick={handleChatClick}
-              className="p-1.5 text-accent-blue hover:text-accent-blue/80 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="p-1.5 text-text-tertiary hover:text-accent-blue transition-colors"
               title="Open chat"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -162,18 +196,33 @@ export function TaskItem({
             </button>
           )}
 
-          {/* Three-dot menu (shows on hover) */}
-          <button
-            onClick={e => e.stopPropagation()}
-            className="p-1 text-text-tertiary hover:text-text opacity-0 group-hover:opacity-100 transition-opacity"
-            title="More options"
-          >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <circle cx="12" cy="6" r="1.5" />
-              <circle cx="12" cy="12" r="1.5" />
-              <circle cx="12" cy="18" r="1.5" />
-            </svg>
-          </button>
+          {/* Calendar button for date reassignment */}
+          {onDateChange && task.status !== 'archived' && (
+            <div className="relative" ref={datePickerRef}>
+              <button
+                onClick={handleCalendarClick}
+                className="p-1.5 text-text-tertiary hover:text-accent-blue transition-colors"
+                title="Change date"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </button>
+              {showDatePicker && (
+                <div
+                  className="absolute right-0 top-full mt-1 z-50 bg-surface-secondary border border-border rounded-lg shadow-elevated p-2"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <input
+                    type="date"
+                    value={task.dateToWorkOn}
+                    onChange={handleDateSelect}
+                    className="bg-surface-tertiary text-text text-sm rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-accent-blue"
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

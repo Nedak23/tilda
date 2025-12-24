@@ -66,6 +66,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
     completeTask,
     reopenTask,
     reorderTask,
+    updateTask,
     contexts,
     taskContextsByTask
   } = useTaskStore()
@@ -156,6 +157,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                 onSelect={() => setExaminingTask(task.id)}
                 onComplete={() => handleTaskAction(task)}
                 onOpenChat={() => setActiveTask(task.id)}
+                onDateChange={(date) => updateTask(task.id, { dateToWorkOn: date })}
                 isSelected={examiningTaskId === task.id}
                 contexts={getTaskContexts(task.id)}
               />
@@ -201,6 +203,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                   onSelect={() => setExaminingTask(task.id)}
                   onComplete={() => handleTaskAction(task)}
                   onOpenChat={() => setActiveTask(task.id)}
+                  onDateChange={(date) => updateTask(task.id, { dateToWorkOn: date })}
                   isSelected={examiningTaskId === task.id}
                   contexts={getTaskContexts(task.id)}
                 />
