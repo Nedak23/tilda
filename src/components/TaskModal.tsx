@@ -321,9 +321,6 @@ export function TaskModal({ task, onClose, onExpandChat }: TaskModalProps) {
 
             {/* Chat input */}
             <div className="px-4 py-3 border-t border-border flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-accent-blue/20 flex items-center justify-center text-accent-blue text-xs font-medium">
-                KH
-              </div>
               {/* Attach button */}
               <button
                 onClick={() => fileInputRef.current?.click()}
