@@ -110,12 +110,12 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
   }
 
   return (
-    <aside className="w-52 bg-surface-secondary flex flex-col h-full border-r border-border-light">
-      {/* Titlebar drag area */}
-      <div className="h-12 titlebar-drag" />
+    <aside className="w-full bg-surface-secondary flex flex-col h-full border-l border-border-light">
+      {/* Top spacer to align with Tilda's clear chat bar */}
+      <div className="flex-shrink-0 h-9 border-b border-border-light" />
 
       {/* Navigation */}
-      <nav className="flex-1 px-2 py-1 overflow-y-auto">
+      <nav className="flex-1 px-2 pt-2 pb-1 overflow-y-auto">
         <ul className="space-y-0.5">
           {navItems.map(item => {
             const count = getCounts(item.id)

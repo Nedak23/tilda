@@ -123,3 +123,13 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .animate-slide-up {
   animation: slide-up 0.3s ease-out;
 }
+
+/* Resize handle styling */
+[data-separator] {
+  transition: background-color 150ms ease;
+}
+
+[data-separator]:hover,
+[data-separator][data-active] {
+  background-color: #5BA4F5 !important;
+}

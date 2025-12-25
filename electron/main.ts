@@ -60,7 +60,7 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 600,
     titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 16 },
+    trafficLightPosition: { x: 16, y: 10 },
     backgroundColor: '#1C1C1E',
     vibrancy: 'sidebar',
     visualEffectState: 'active',
