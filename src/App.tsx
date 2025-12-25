@@ -82,9 +82,7 @@ function App() {
       }
       // Escape to go back or cancel creation
       if (e.key === 'Escape') {
-        if (!isTildaCollapsed) {
-          toggleTilda()
-        } else if (isCreatingTask) {
+        if (isCreatingTask) {
           setIsCreatingTask(false)
         } else if (activeTaskId) {
           setActiveTask(null)
@@ -92,16 +90,21 @@ function App() {
           setExaminingTask(null)
         }
       }
-      // Cmd/Ctrl + Shift + T to toggle Tilda
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 't') {
+      // Cmd/Ctrl + B to toggle Tilda (left sidebar)
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key === 'b') {
         e.preventDefault()
         toggleTilda()
+      }
+      // Cmd/Ctrl + Option/Alt + B to toggle Navigation (right sidebar)
+      if ((e.metaKey || e.ctrlKey) && e.altKey && e.key === 'b') {
+        e.preventDefault()
+        toggleNav()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activeTaskId, examiningTaskId, isCreatingTask, currentView, setActiveTask, setExaminingTask, isTildaCollapsed, toggleTilda])
+  }, [activeTaskId, examiningTaskId, isCreatingTask, currentView, setActiveTask, setExaminingTask, toggleTilda, toggleNav])
 
   const activeTask = tasks.find(t => t.id === activeTaskId)
   const examiningTask = tasks.find(t => t.id === examiningTaskId)
@@ -153,7 +156,7 @@ function App() {
 
   // Main content component
   const mainContent = (
-    <main className="flex-1 flex flex-col min-w-0 h-full relative">
+    <main className="flex-1 flex flex-col min-w-0 h-full relative bg-surface">
       {activeTask ? (
         <TaskChat
           task={activeTask}
@@ -204,6 +207,7 @@ function App() {
         isNavCollapsed={isNavCollapsed}
         onToggleTilda={toggleTilda}
         onToggleNav={toggleNav}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
       {/* Main layout with resizable panels */}
@@ -214,7 +218,7 @@ function App() {
           }
           centerPanel={mainContent}
           rightPanel={
-            <Sidebar onOpenSettings={() => setIsSettingsOpen(true)} />
+            <Sidebar />
           }
           isLeftCollapsed={isTildaCollapsed}
           isRightCollapsed={isNavCollapsed}

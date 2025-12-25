@@ -79,7 +79,7 @@ export function PanelLayout({
         panelRef={setLeftPanelHandle as React.Ref<PanelImperativeHandle>}
         id="tilda-sidebar"
         defaultSize="20%"
-        minSize="280px"
+        minSize="180px"
         maxSize="480px"
         collapsible
         collapsedSize="0px"

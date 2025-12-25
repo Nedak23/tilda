@@ -14,10 +14,13 @@ export default {
           hover: '#E6C009',
         },
         surface: {
-          DEFAULT: '#1C1C1E', // Main background
-          secondary: '#2C2C2E', // Sidebar/cards
+          DEFAULT: '#1C1C1E', // Sidebars (dark)
+          secondary: '#2C2C2E', // Cards
           tertiary: '#3A3A3C', // Hover states
           elevated: '#3A3A3C', // Elevated cards
+          selected: '#5A5A5C', // Selected item background
+          button: '#6B6B6E', // Secondary button background
+          buttonHover: '#7B7B7E', // Secondary button hover
         },
         text: {
           DEFAULT: '#FFFFFF',
@@ -28,6 +31,7 @@ export default {
         border: {
           DEFAULT: '#3A3A3C',
           light: '#2C2C2E',
+          selected: '#6A6A6C', // Selected item border
         },
         success: '#32D74B',
         warning: '#FF9F0A',
