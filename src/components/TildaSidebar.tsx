@@ -6,7 +6,6 @@ import type { TildaMessage } from '../types'
 
 interface TildaSidebarProps {
   isOpen: boolean
-  onClose: () => void
 }
 
 function TildaChatMessage({ message, isStreaming = false }: { message: TildaMessage; isStreaming?: boolean }) {
@@ -41,7 +40,7 @@ function TildaChatMessage({ message, isStreaming = false }: { message: TildaMess
   )
 }
 
-export function TildaSidebar({ isOpen, onClose }: TildaSidebarProps) {
+export function TildaSidebar({ isOpen }: TildaSidebarProps) {
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -112,44 +111,19 @@ export function TildaSidebar({ isOpen, onClose }: TildaSidebarProps) {
   }
 
   return (
-    <div
-      className={`
-        fixed top-0 right-0 h-full w-80 bg-surface border-l border-border-light
-        flex flex-col z-40
-        transform transition-transform duration-200 ease-out
-        ${isOpen ? 'translate-x-0' : 'translate-x-full'}
-      `}
-    >
-      {/* Header */}
-      <div className="flex-shrink-0 border-b border-border-light">
-        <div className="h-12 relative">
-          {/* Drag area behind content */}
-          <div className="absolute inset-0 titlebar-drag" />
-          {/* Content on top */}
-          <div className="relative h-full flex items-center justify-between px-4">
-            <h2 className="font-semibold text-text">Tilda</h2>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={clearTildaHistory}
-                className="titlebar-no-drag p-1.5 rounded text-text-tertiary hover:text-text-secondary hover:bg-surface-secondary transition-colors"
-                title="Clear history"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-              <button
-                onClick={onClose}
-                className="titlebar-no-drag p-1.5 rounded text-text-tertiary hover:text-text-secondary hover:bg-surface-secondary transition-colors"
-                title="Close"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
+    <div className="h-full w-full bg-surface border-r border-border-light flex flex-col">
+      {/* Clear chat bar */}
+      <div className="flex-shrink-0 px-3 py-2 border-b border-border-light">
+        <button
+          onClick={clearTildaHistory}
+          className="flex items-center gap-1.5 text-xs text-text-tertiary hover:text-text-secondary transition-colors"
+          title="Clear chat history"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          <span>Clear chat</span>
+        </button>
       </div>
 
       {/* Messages */}

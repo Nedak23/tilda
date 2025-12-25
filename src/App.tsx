@@ -6,9 +6,11 @@ import { TaskChat } from './components/TaskChat'
 import { TaskModal } from './components/TaskModal'
 import { InlineTaskCreate } from './components/InlineTaskCreate'
 import { SettingsModal } from './components/SettingsModal'
-import { TildaToggleButton } from './components/TildaToggleButton'
 import { TildaSidebar } from './components/TildaSidebar'
 import { ContextDetailView } from './components/ContextDetailView'
+import { PanelLayout } from './components/PanelLayout'
+import { ControlBar } from './components/ControlBar'
+import { useLayoutState } from './hooks/useLayoutState'
 import type { AILearningNote } from './types'
 
 function App() {
@@ -28,9 +30,17 @@ function App() {
     taskContextsByTask
   } = useTaskStore()
 
+  const {
+    isTildaCollapsed,
+    isNavCollapsed,
+    toggleTilda,
+    toggleNav,
+    setTildaCollapsed,
+    setNavCollapsed
+  } = useLayoutState()
+
   const [isCreatingTask, setIsCreatingTask] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [isTildaOpen, setIsTildaOpen] = useState(false)
   const [notification, setNotification] = useState<{ message: string; contextId: string } | null>(null)
 
   useEffect(() => {
@@ -72,8 +82,8 @@ function App() {
       }
       // Escape to go back or cancel creation
       if (e.key === 'Escape') {
-        if (isTildaOpen) {
-          setIsTildaOpen(false)
+        if (!isTildaCollapsed) {
+          toggleTilda()
         } else if (isCreatingTask) {
           setIsCreatingTask(false)
         } else if (activeTaskId) {
@@ -85,13 +95,13 @@ function App() {
       // Cmd/Ctrl + Shift + T to toggle Tilda
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 't') {
         e.preventDefault()
-        setIsTildaOpen(!isTildaOpen)
+        toggleTilda()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activeTaskId, examiningTaskId, isCreatingTask, currentView, setActiveTask, setExaminingTask, isTildaOpen])
+  }, [activeTaskId, examiningTaskId, isCreatingTask, currentView, setActiveTask, setExaminingTask, isTildaCollapsed, toggleTilda])
 
   const activeTask = tasks.find(t => t.id === activeTaskId)
   const examiningTask = tasks.find(t => t.id === examiningTaskId)
@@ -141,72 +151,77 @@ function App() {
     )
   }
 
-  return (
-    <div className="h-screen flex bg-surface overflow-hidden">
-      {/* Sidebar */}
-      <Sidebar onOpenSettings={() => setIsSettingsOpen(true)} />
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 relative">
-        {activeTask ? (
-          <TaskChat
-            task={activeTask}
-            onBack={() => setActiveTask(null)}
+  // Main content component
+  const mainContent = (
+    <main className="flex-1 flex flex-col min-w-0 h-full relative">
+      {activeTask ? (
+        <TaskChat
+          task={activeTask}
+          onBack={() => setActiveTask(null)}
+        />
+      ) : isContextView && currentContextId ? (
+        <>
+          <ContextDetailView
+            contextId={currentContextId}
+            onTaskSelect={(task) => setExaminingTask(task.id)}
+            onTaskComplete={(id) => completeTask(id)}
           />
-        ) : isContextView && currentContextId ? (
-          <>
-            {/* Titlebar drag area for context view */}
-            <div className="h-12 titlebar-drag" />
-
-            {/* Tilda Toggle Button */}
-            <TildaToggleButton
-              isOpen={isTildaOpen}
-              onToggle={() => setIsTildaOpen(!isTildaOpen)}
-            />
-
-            <ContextDetailView
-              contextId={currentContextId}
-              onTaskSelect={(task) => setExaminingTask(task.id)}
-              onTaskComplete={(id) => completeTask(id)}
-            />
-          </>
-        ) : (
-          <>
-            {/* Header */}
-            <header className="flex-shrink-0 relative">
-              {/* Titlebar drag area */}
-              <div className="h-12 titlebar-drag" />
-
-              {/* Tilda Toggle Button */}
-              <TildaToggleButton
-                isOpen={isTildaOpen}
-                onToggle={() => setIsTildaOpen(!isTildaOpen)}
-              />
-
-              {/* View Header */}
-              <div className="flex items-center gap-3 px-6 pb-6">
-                {getViewIcon()}
-                <h1 className="text-2xl font-bold text-text">
-                  {getViewTitle()}
-                </h1>
-              </div>
-            </header>
-
-            {/* Inline task creation */}
-            {isCreatingTask && (
-              <InlineTaskCreate
-                onClose={() => setIsCreatingTask(false)}
-              />
-            )}
-
-            {/* Task List */}
-            <div className="flex-1 overflow-y-auto">
-              <TaskList onCreateTask={() => setIsCreatingTask(true)} />
+        </>
+      ) : (
+        <>
+          {/* Header */}
+          <header className="flex-shrink-0 relative">
+            {/* View Header */}
+            <div className="flex items-center gap-3 px-6 py-4">
+              {getViewIcon()}
+              <h1 className="text-2xl font-bold text-text">
+                {getViewTitle()}
+              </h1>
             </div>
+          </header>
 
-          </>
-        )}
-      </main>
+          {/* Inline task creation */}
+          {isCreatingTask && (
+            <InlineTaskCreate
+              onClose={() => setIsCreatingTask(false)}
+            />
+          )}
+
+          {/* Task List */}
+          <div className="flex-1 overflow-y-auto">
+            <TaskList onCreateTask={() => setIsCreatingTask(true)} />
+          </div>
+        </>
+      )}
+    </main>
+  )
+
+  return (
+    <div className="h-screen flex flex-col bg-surface overflow-hidden">
+      {/* Control bar with toggle buttons - always visible at top */}
+      <ControlBar
+        isTildaCollapsed={isTildaCollapsed}
+        isNavCollapsed={isNavCollapsed}
+        onToggleTilda={toggleTilda}
+        onToggleNav={toggleNav}
+      />
+
+      {/* Main layout with resizable panels */}
+      <div className="flex-1 min-h-0 flex">
+        <PanelLayout
+          leftPanel={
+            <TildaSidebar isOpen={!isTildaCollapsed} />
+          }
+          centerPanel={mainContent}
+          rightPanel={
+            <Sidebar onOpenSettings={() => setIsSettingsOpen(true)} />
+          }
+          isLeftCollapsed={isTildaCollapsed}
+          isRightCollapsed={isNavCollapsed}
+          onLeftCollapseChange={setTildaCollapsed}
+          onRightCollapseChange={setNavCollapsed}
+        />
+      </div>
 
       {/* Task Modal */}
       {examiningTask && (
@@ -221,12 +236,6 @@ function App() {
       {isSettingsOpen && (
         <SettingsModal onClose={() => setIsSettingsOpen(false)} />
       )}
-
-      {/* Tilda Sidebar */}
-      <TildaSidebar
-        isOpen={isTildaOpen}
-        onClose={() => setIsTildaOpen(false)}
-      />
 
       {/* AI Note Saved Notification */}
       {notification && (
