@@ -127,10 +127,10 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div className="flex-1 overflow-y-auto p-3 space-y-3 hide-scrollbar">
         {tildaMessages.length === 0 && !tildaStreamingContent && (
           <div className="h-full flex flex-col items-center justify-center text-text-tertiary text-sm">
-            <span className="text-3xl mb-2">👋</span>
+            <span className="text-5xl font-bold text-text-secondary mb-2">~</span>
             <p>Hi! I'm Tilda.</p>
             <p>I can help you manage your tasks.</p>
             <p className="mt-2 text-text-tertiary/70 text-xs">
@@ -225,7 +225,7 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
           <button
             onClick={handleSubmit}
             disabled={!input.trim() || isTildaPending}
-            className="p-2 rounded-lg bg-accent-blue text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-accent-blue/90 transition-colors"
+            className="p-2 rounded-lg bg-surface-button text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-surface-buttonHover transition-colors"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

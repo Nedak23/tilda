@@ -279,7 +279,7 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
           <button
             onClick={handleSend}
             disabled={!input.trim() || isPending}
-            className="p-2 bg-accent-blue text-white rounded-lg hover:bg-accent-blue/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-2 bg-surface-button text-white rounded-lg hover:bg-surface-buttonHover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg
               className="w-5 h-5"

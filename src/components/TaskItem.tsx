@@ -72,8 +72,8 @@ export function TaskItem({
       className={`
         group mx-4 mb-2 p-4 rounded-lg border cursor-pointer transition-all max-w-sm
         ${isSelected
-          ? 'bg-surface-tertiary border-border'
-          : 'bg-surface-secondary border-border hover:border-border-light'
+          ? 'bg-surface-selected border-border-selected'
+          : 'bg-surface-secondary border-border hover:border-border-selected'
         }
       `}
     >
