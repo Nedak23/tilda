@@ -106,7 +106,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-full bg-surface flex flex-col h-full border-l border-border-light">
+    <aside className="w-full bg-surface flex flex-col h-full">
       {/* Navigation */}
       <nav className="flex-1 px-2 pt-2 pb-1 overflow-y-auto">
         <ul className="space-y-0.5">

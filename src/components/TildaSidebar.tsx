@@ -111,7 +111,7 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
   }
 
   return (
-    <div className="h-full w-full bg-surface border-r border-border-light flex flex-col">
+    <div className="h-full w-full bg-surface flex flex-col">
       {/* Clear chat bar */}
       <div className="flex-shrink-0 px-3 py-2 border-b border-border-light">
         <button

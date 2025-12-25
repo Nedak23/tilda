@@ -84,10 +84,9 @@ export function PanelLayout({
         collapsible
         collapsedSize="0px"
         onResize={handleLeftResize}
+        className="overflow-hidden"
       >
-        <div className="h-full overflow-hidden">
-          {leftPanel}
-        </div>
+        {leftPanel}
       </Panel>
 
       <Separator className="w-1 bg-border-light hover:bg-accent-blue transition-colors cursor-col-resize" />
@@ -97,10 +96,9 @@ export function PanelLayout({
         id="main-content"
         defaultSize="60%"
         minSize="30%"
+        className="overflow-hidden"
       >
-        <div className="h-full overflow-hidden">
-          {centerPanel}
-        </div>
+        {centerPanel}
       </Panel>
 
       <Separator className="w-1 bg-border-light hover:bg-accent-blue transition-colors cursor-col-resize" />
@@ -115,10 +113,9 @@ export function PanelLayout({
         collapsible
         collapsedSize="0px"
         onResize={handleRightResize}
+        className="overflow-hidden"
       >
-        <div className="h-full overflow-hidden">
-          {rightPanel}
-        </div>
+        {rightPanel}
       </Panel>
     </Group>
   )
