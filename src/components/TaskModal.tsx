@@ -3,6 +3,7 @@ import { format } from 'date-fns'
 import { useTaskStore } from '../stores/taskStore'
 import { ChatMessage } from './ChatMessage'
 import { isFileSupported, FILE_INPUT_ACCEPT } from '../utils/fileUtils'
+import { GENERAL_CONTEXT_ID } from '../types'
 import type { Task } from '../types'
 
 interface TaskModalProps {
@@ -417,6 +418,9 @@ export function TaskModal({ task, onClose, onExpandChat }: TaskModalProps) {
           </div>
 
           {/* Contexts */}
+          {(() => {
+            const filteredContexts = contexts.filter(c => c.id !== GENERAL_CONTEXT_ID)
+            return (
           <div>
             <label className="text-xs text-text-tertiary uppercase tracking-wide">Contexts</label>
             <button
@@ -427,15 +431,15 @@ export function TaskModal({ task, onClose, onExpandChat }: TaskModalProps) {
               <span>
                 {taskContexts.length === 0
                   ? 'None'
-                  : contexts.filter(c => taskContexts.includes(c.id)).map(c => c.name).join(', ')}
+                  : filteredContexts.filter(c => taskContexts.includes(c.id)).map(c => c.name).join(', ') || 'None'}
               </span>
             </button>
             {showContextPicker && (
               <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
-                {contexts.length === 0 ? (
+                {filteredContexts.length === 0 ? (
                   <p className="text-xs text-text-tertiary italic">No contexts created</p>
                 ) : (
-                  contexts.map(context => (
+                  filteredContexts.map(context => (
                     <label
                       key={context.id}
                       className="flex items-center gap-2 px-2 py-1 rounded hover:bg-surface-tertiary cursor-pointer"
@@ -453,6 +457,8 @@ export function TaskModal({ task, onClose, onExpandChat }: TaskModalProps) {
               </div>
             )}
           </div>
+            )
+          })()}
 
         </div>
       </div>

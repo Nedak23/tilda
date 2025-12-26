@@ -192,15 +192,15 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
       )}
 
       {/* Input */}
-      <div className={`flex-shrink-0 p-3 ${tildaAttachments.length === 0 ? 'border-t border-border-light' : ''}`}>
-        <div className="flex items-end gap-2">
+      <div className={`flex-shrink-0 px-3 h-12 flex items-center ${tildaAttachments.length === 0 ? 'border-t border-border-light' : ''}`}>
+        <div className="flex items-center gap-2 w-full">
           {/* Attach button */}
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="p-2 text-text-tertiary hover:text-text-secondary rounded-lg transition-colors"
+            className="p-1.5 text-text-tertiary hover:text-text-secondary rounded-lg transition-colors"
             title="Attach file"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
             </svg>
           </button>
@@ -218,16 +218,16 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask Tilda..."
-            className="flex-1 bg-[#1a1a1a] text-text text-sm rounded-2xl px-4 py-2.5 resize-none focus:outline-none min-h-[40px] max-h-[120px]"
+            className="flex-1 bg-[#1a1a1a] text-text text-sm rounded-xl px-3 py-1 resize-none focus:outline-none h-7 max-h-[120px]"
             rows={1}
             disabled={isTildaPending}
           />
           <button
             onClick={handleSubmit}
             disabled={!input.trim() || isTildaPending}
-            className="p-2 rounded-lg bg-surface-button text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-surface-buttonHover transition-colors"
+            className="p-1.5 rounded-lg bg-surface-button text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-surface-buttonHover transition-colors"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
             </svg>
           </button>

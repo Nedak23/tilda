@@ -7,21 +7,6 @@ interface AILearningNotesListProps {
   onDelete: (id: string) => void
 }
 
-function getCategoryIcon(category: AILearningNoteCategory): string {
-  switch (category) {
-    case 'preference':
-      return '💡'
-    case 'domain_knowledge':
-      return '📚'
-    case 'workflow':
-      return '🔄'
-    case 'technical_decision':
-      return '⚙️'
-    default:
-      return '📝'
-  }
-}
-
 function getCategoryLabel(category: AILearningNoteCategory): string {
   switch (category) {
     case 'preference':
@@ -58,10 +43,7 @@ export function AILearningNotesList({ notes, onEdit, onDelete }: AILearningNotes
   if (notes.length === 0) {
     return (
       <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <span className="text-base">🤖</span>
-          <h3 className="text-sm font-medium text-text-secondary">AI Learning Notes</h3>
-        </div>
+        <h3 className="text-sm font-medium text-text-secondary">AI Learning Notes</h3>
         <p className="text-xs text-text-secondary/70 italic py-2">
           The AI will automatically save useful information here when you complete tasks in this context.
         </p>
@@ -71,12 +53,9 @@ export function AILearningNotesList({ notes, onEdit, onDelete }: AILearningNotes
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <span className="text-base">🤖</span>
-        <h3 className="text-sm font-medium text-text-secondary">
-          AI Learning Notes ({notes.length})
-        </h3>
-      </div>
+      <h3 className="text-sm font-medium text-text-secondary">
+        AI Learning Notes ({notes.length})
+      </h3>
 
       <ul className="space-y-2">
         {notes.map(note => {
@@ -92,7 +71,6 @@ export function AILearningNotesList({ notes, onEdit, onDelete }: AILearningNotes
                 className="flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-surface-tertiary/70 transition-colors group"
                 onClick={() => setExpandedNoteId(isExpanded ? null : note.id)}
               >
-                <span className="text-sm mt-0.5">{getCategoryIcon(note.category)}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-text truncate">
