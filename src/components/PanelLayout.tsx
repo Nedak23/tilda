@@ -1,6 +1,7 @@
 import { Group, Panel, Separator, usePanelCallbackRef } from 'react-resizable-panels'
 import { ReactNode, useEffect, useRef, useCallback } from 'react'
 import type { PanelImperativeHandle, PanelSize } from 'react-resizable-panels'
+import { DEFAULT_TILDA_SIZE, DEFAULT_NAV_SIZE } from '../hooks/useLayoutState'
 
 interface PanelLayoutProps {
   leftPanel: ReactNode
@@ -10,6 +11,10 @@ interface PanelLayoutProps {
   isRightCollapsed: boolean
   onLeftCollapseChange?: (collapsed: boolean) => void
   onRightCollapseChange?: (collapsed: boolean) => void
+  leftSize?: number
+  rightSize?: number
+  onLeftSizeChange?: (size: number) => void
+  onRightSizeChange?: (size: number) => void
 }
 
 export function PanelLayout({
@@ -19,7 +24,11 @@ export function PanelLayout({
   isLeftCollapsed,
   isRightCollapsed,
   onLeftCollapseChange,
-  onRightCollapseChange
+  onRightCollapseChange,
+  leftSize = DEFAULT_TILDA_SIZE,
+  rightSize = DEFAULT_NAV_SIZE,
+  onLeftSizeChange,
+  onRightSizeChange
 }: PanelLayoutProps) {
   const [leftPanelHandle, setLeftPanelHandle] = usePanelCallbackRef()
   const [rightPanelHandle, setRightPanelHandle] = usePanelCallbackRef()
@@ -27,6 +36,33 @@ export function PanelLayout({
   // Track previous values to only react to changes, not initial mount
   const prevLeftCollapsed = useRef(isLeftCollapsed)
   const prevRightCollapsed = useRef(isRightCollapsed)
+  const initializedRef = useRef(false)
+
+  // Restore saved sizes on initial mount.
+  // We capture the current values in refs to avoid stale closure issues,
+  // since this effect only runs once when panel handles become available.
+  const leftSizeRef = useRef(leftSize)
+  const rightSizeRef = useRef(rightSize)
+  leftSizeRef.current = leftSize
+  rightSizeRef.current = rightSize
+
+  useEffect(() => {
+    if (initializedRef.current) return
+    if (!leftPanelHandle || !rightPanelHandle) return
+
+    initializedRef.current = true
+
+    // Defer resize to next frame to ensure the panel library has finished
+    // its internal layout calculations after mounting
+    requestAnimationFrame(() => {
+      if (leftSizeRef.current !== DEFAULT_TILDA_SIZE && !isLeftCollapsed) {
+        leftPanelHandle.resize(`${leftSizeRef.current}%`)
+      }
+      if (rightSizeRef.current !== DEFAULT_NAV_SIZE && !isRightCollapsed) {
+        rightPanelHandle.resize(`${rightSizeRef.current}%`)
+      }
+    })
+  }, [leftPanelHandle, rightPanelHandle, isLeftCollapsed, isRightCollapsed])
 
   // Handle collapse state changes (only when state actually changes)
   useEffect(() => {
@@ -37,9 +73,13 @@ export function PanelLayout({
     if (isLeftCollapsed) {
       leftPanelHandle.collapse()
     } else {
+      // Expand first, then resize in next frame after expand animation completes
       leftPanelHandle.expand()
+      requestAnimationFrame(() => {
+        leftPanelHandle.resize(`${leftSize}%`)
+      })
     }
-  }, [isLeftCollapsed, leftPanelHandle])
+  }, [isLeftCollapsed, leftPanelHandle, leftSize])
 
   useEffect(() => {
     if (!rightPanelHandle) return
@@ -49,24 +89,34 @@ export function PanelLayout({
     if (isRightCollapsed) {
       rightPanelHandle.collapse()
     } else {
+      // Expand first, then resize in next frame after expand animation completes
       rightPanelHandle.expand()
+      requestAnimationFrame(() => {
+        rightPanelHandle.resize(`${rightSize}%`)
+      })
     }
-  }, [isRightCollapsed, rightPanelHandle])
+  }, [isRightCollapsed, rightPanelHandle, rightSize])
 
-  // Track collapse state from user dragging panels
+  // Track collapse state and size from user dragging panels
   const handleLeftResize = useCallback((size: PanelSize) => {
     const collapsed = size.inPixels === 0
     if (collapsed !== isLeftCollapsed) {
       onLeftCollapseChange?.(collapsed)
     }
-  }, [isLeftCollapsed, onLeftCollapseChange])
+    if (!collapsed && size.asPercentage > 0) {
+      onLeftSizeChange?.(size.asPercentage)
+    }
+  }, [isLeftCollapsed, onLeftCollapseChange, onLeftSizeChange])
 
   const handleRightResize = useCallback((size: PanelSize) => {
     const collapsed = size.inPixels === 0
     if (collapsed !== isRightCollapsed) {
       onRightCollapseChange?.(collapsed)
     }
-  }, [isRightCollapsed, onRightCollapseChange])
+    if (!collapsed && size.asPercentage > 0) {
+      onRightSizeChange?.(size.asPercentage)
+    }
+  }, [isRightCollapsed, onRightCollapseChange, onRightSizeChange])
 
   return (
     <Group
@@ -78,16 +128,15 @@ export function PanelLayout({
       <Panel
         panelRef={setLeftPanelHandle as React.Ref<PanelImperativeHandle>}
         id="tilda-sidebar"
-        defaultSize="20%"
+        defaultSize="40%"
         minSize="180px"
         maxSize="480px"
         collapsible
         collapsedSize="0px"
         onResize={handleLeftResize}
+        className="overflow-hidden"
       >
-        <div className="h-full overflow-hidden">
-          {leftPanel}
-        </div>
+        {leftPanel}
       </Panel>
 
       <Separator className="w-1 bg-border-light hover:bg-accent-blue transition-colors cursor-col-resize" />
@@ -97,10 +146,9 @@ export function PanelLayout({
         id="main-content"
         defaultSize="60%"
         minSize="30%"
+        className="overflow-hidden"
       >
-        <div className="h-full overflow-hidden">
-          {centerPanel}
-        </div>
+        {centerPanel}
       </Panel>
 
       <Separator className="w-1 bg-border-light hover:bg-accent-blue transition-colors cursor-col-resize" />
@@ -115,10 +163,9 @@ export function PanelLayout({
         collapsible
         collapsedSize="0px"
         onResize={handleRightResize}
+        className="overflow-hidden"
       >
-        <div className="h-full overflow-hidden">
-          {rightPanel}
-        </div>
+        {rightPanel}
       </Panel>
     </Group>
   )

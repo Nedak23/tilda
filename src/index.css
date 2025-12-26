@@ -127,6 +127,12 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 /* Resize handle styling */
 [data-separator] {
   transition: background-color 150ms ease;
+  outline: none !important;
+}
+
+[data-separator]:focus,
+[data-separator]:focus-visible {
+  outline: none !important;
 }
 
 [data-separator]:hover,
