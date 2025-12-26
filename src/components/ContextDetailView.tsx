@@ -212,6 +212,7 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
                     task={task}
                     onComplete={() => onTaskComplete(task.id)}
                     onSelect={() => onTaskSelect(task)}
+                    onClick={() => onTaskSelect(task)}
                     onDateChange={(date) => updateTask(task.id, { dateToWorkOn: date })}
                     showDate
                   />
