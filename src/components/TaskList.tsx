@@ -21,6 +21,9 @@ import type { Task } from '../types'
 
 interface TaskListProps {
   onCreateTask?: () => void
+  selectedTaskIds: Set<string>
+  onTaskClick: (taskId: string, e: React.MouseEvent) => void
+  onClearSelection: () => void
 }
 
 interface DateGroup {
@@ -54,10 +57,9 @@ function groupTasksByDate(tasks: Task[], dateField: 'dateToWorkOn' | 'completion
     }))
 }
 
-export function TaskList({ onCreateTask }: TaskListProps) {
+export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSelection }: TaskListProps) {
   const {
     currentView,
-    examiningTaskId,
     setExaminingTask,
     setActiveTask,
     getTodayTasks,
@@ -149,16 +151,17 @@ export function TaskList({ onCreateTask }: TaskListProps) {
           items={todayTasks.map(t => t.id)}
           strategy={verticalListSortingStrategy}
         >
-          <div>
+          <div onClick={onClearSelection}>
             {todayTasks.map(task => (
               <SortableTaskItem
                 key={task.id}
                 task={task}
                 onSelect={() => setExaminingTask(task.id)}
+                onClick={(e) => onTaskClick(task.id, e)}
                 onComplete={() => handleTaskAction(task)}
                 onOpenChat={() => setActiveTask(task.id)}
                 onDateChange={(date) => updateTask(task.id, { dateToWorkOn: date })}
-                isSelected={examiningTaskId === task.id}
+                isSelected={selectedTaskIds.has(task.id)}
                 contexts={getTaskContexts(task.id)}
               />
             ))}
@@ -189,7 +192,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
     }
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-4" onClick={onClearSelection}>
         {upcomingGroups.map(group => (
           <div key={group.date}>
             <h3 className="text-xs font-medium text-text-secondary px-4 mb-1">
@@ -201,10 +204,11 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                   key={task.id}
                   task={task}
                   onSelect={() => setExaminingTask(task.id)}
+                  onClick={(e) => onTaskClick(task.id, e)}
                   onComplete={() => handleTaskAction(task)}
                   onOpenChat={() => setActiveTask(task.id)}
                   onDateChange={(date) => updateTask(task.id, { dateToWorkOn: date })}
-                  isSelected={examiningTaskId === task.id}
+                  isSelected={selectedTaskIds.has(task.id)}
                   contexts={getTaskContexts(task.id)}
                 />
               ))}
@@ -227,7 +231,7 @@ export function TaskList({ onCreateTask }: TaskListProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" onClick={onClearSelection}>
       {archiveGroups.map(group => (
         <div key={group.date}>
           <h3 className="text-xs font-medium text-text-secondary px-4 mb-1">
@@ -239,10 +243,12 @@ export function TaskList({ onCreateTask }: TaskListProps) {
                 key={task.id}
                 task={task}
                 onSelect={() => setExaminingTask(task.id)}
+                onClick={(e) => onTaskClick(task.id, e)}
                 onComplete={() => handleTaskAction(task)}
                 onOpenChat={() => setActiveTask(task.id)}
-                isSelected={examiningTaskId === task.id}
+                isSelected={selectedTaskIds.has(task.id)}
                 showCompletionDate
+                contexts={getTaskContexts(task.id)}
               />
             ))}
           </div>

@@ -6,20 +6,26 @@ import type { Task, Context } from '../types'
 interface SortableTaskItemProps {
   task: Task
   onSelect: () => void
+  onClick: (e: React.MouseEvent) => void
   onComplete: () => void
   onOpenChat?: () => void
   onDateChange?: (date: string) => void
   isSelected?: boolean
+  showCompletionDate?: boolean
+  showDate?: boolean
   contexts?: Context[]
 }
 
 export function SortableTaskItem({
   task,
   onSelect,
+  onClick,
   onComplete,
   onOpenChat,
   onDateChange,
   isSelected,
+  showCompletionDate,
+  showDate,
   contexts
 }: SortableTaskItemProps) {
   const {
@@ -48,10 +54,13 @@ export function SortableTaskItem({
       <TaskItem
         task={task}
         onSelect={onSelect}
+        onClick={onClick}
         onComplete={onComplete}
         onOpenChat={onOpenChat}
         onDateChange={onDateChange}
         isSelected={isSelected}
+        showCompletionDate={showCompletionDate}
+        showDate={showDate}
         contexts={contexts}
       />
     </div>
