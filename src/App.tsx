@@ -33,10 +33,14 @@ function App() {
   const {
     isTildaCollapsed,
     isNavCollapsed,
+    tildaSize,
+    navSize,
     toggleTilda,
     toggleNav,
     setTildaCollapsed,
-    setNavCollapsed
+    setNavCollapsed,
+    setTildaSize,
+    setNavSize
   } = useLayoutState()
 
   const [isCreatingTask, setIsCreatingTask] = useState(false)
@@ -224,6 +228,10 @@ function App() {
           isRightCollapsed={isNavCollapsed}
           onLeftCollapseChange={setTildaCollapsed}
           onRightCollapseChange={setNavCollapsed}
+          leftSize={tildaSize}
+          rightSize={navSize}
+          onLeftSizeChange={setTildaSize}
+          onRightSizeChange={setNavSize}
         />
       </div>
 

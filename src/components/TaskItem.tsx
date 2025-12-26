@@ -67,16 +67,17 @@ export function TaskItem({
   }, [showDatePicker])
 
   return (
-    <div
-      onClick={onSelect}
-      className={`
-        group mx-4 mb-2 p-4 rounded-lg border cursor-pointer transition-all max-w-sm
-        ${isSelected
-          ? 'bg-surface-selected border-border-selected'
-          : 'bg-surface-secondary border-border hover:border-border-selected'
-        }
-      `}
-    >
+    <div className="mx-4 mb-2 max-w-[580px] w-fit">
+      <div
+        onClick={onSelect}
+        className={`
+          group p-4 rounded-lg border cursor-pointer transition-all
+          ${isSelected
+            ? 'bg-surface-selected border-border-selected'
+            : 'bg-surface-secondary border-border hover:border-border-selected'
+          }
+        `}
+      >
       <div className="flex items-start gap-3">
         {/* Checkbox */}
         {task.status !== 'archived' ? (
@@ -224,6 +225,7 @@ export function TaskItem({
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   )
