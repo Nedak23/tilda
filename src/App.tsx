@@ -241,16 +241,7 @@ function App() {
     if (isContextView) {
       return <span className="text-text-secondary text-2xl">#</span>
     }
-    switch (currentView) {
-      case 'today':
-        return <span className="text-accent text-2xl">★</span>
-      case 'upcoming':
-        return <span className="text-2xl">📅</span>
-      case 'archive':
-        return <span className="text-success text-2xl">✓</span>
-      default:
-        return null
-    }
+    return null
   }
 
   if (isLoading) {
@@ -308,12 +299,12 @@ function App() {
           </div>
 
           {/* Bottom Action Bar */}
-          <div className="flex-shrink-0 border-t border-border-light bg-surface">
-            <div className="flex items-center justify-center gap-8 py-3">
+          <div className="flex-shrink-0 border-t border-border-light bg-surface h-12">
+            <div className="flex items-center justify-center gap-6 h-full">
               {/* New Task Button */}
               <button
                 onClick={() => setIsCreatingTask(true)}
-                className={`p-2 transition-colors ${
+                className={`p-1.5 transition-colors ${
                   currentView === 'archive'
                     ? 'text-text-tertiary opacity-50 cursor-not-allowed'
                     : 'text-text-tertiary hover:text-text'
@@ -321,7 +312,7 @@ function App() {
                 title={currentView === 'archive' ? 'Cannot create tasks in archive' : 'New task (⌘N)'}
                 disabled={currentView === 'archive'}
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
               </button>
@@ -331,7 +322,7 @@ function App() {
                 <div className="relative" ref={datePickerRef}>
                   <button
                     onClick={() => setShowDatePicker(!showDatePicker)}
-                    className={`p-2 transition-colors ${
+                    className={`p-1.5 transition-colors ${
                       selectedTaskIds.size === 0
                         ? 'text-text-tertiary opacity-50 cursor-not-allowed'
                         : 'text-text-tertiary hover:text-text'
@@ -339,7 +330,7 @@ function App() {
                     title="Assign to date"
                     disabled={selectedTaskIds.size === 0}
                   >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   </button>

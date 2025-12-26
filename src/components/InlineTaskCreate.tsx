@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { format } from 'date-fns'
 import { useTaskStore } from '../stores/taskStore'
+import { GENERAL_CONTEXT_ID } from '../types'
 
 interface InlineTaskCreateProps {
   onClose: () => void
@@ -242,12 +243,14 @@ export function InlineTaskCreate({ onClose, defaultDate, defaultContextId }: Inl
               <span>{selectedContextIds.length}</span>
             )}
           </button>
-          {showContextPicker && (
+          {showContextPicker && (() => {
+            const filteredContexts = contexts.filter(c => c.id !== GENERAL_CONTEXT_ID)
+            return (
             <div className="absolute top-full left-0 mt-1 bg-surface-elevated rounded-lg shadow-elevated p-2 z-10 min-w-[150px] max-h-48 overflow-y-auto">
-              {contexts.length === 0 ? (
+              {filteredContexts.length === 0 ? (
                 <p className="text-xs text-text-tertiary italic px-2 py-1">No contexts created</p>
               ) : (
-                contexts.map(context => (
+                filteredContexts.map(context => (
                   <label
                     key={context.id}
                     className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-surface-tertiary cursor-pointer"
@@ -263,7 +266,8 @@ export function InlineTaskCreate({ onClose, defaultDate, defaultContextId }: Inl
                 ))
               )}
             </div>
-          )}
+            )
+          })()}
         </div>
 
         {/* Spacer */}

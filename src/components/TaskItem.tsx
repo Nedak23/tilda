@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { format, differenceInDays, startOfDay } from 'date-fns'
+import { GENERAL_CONTEXT_ID } from '../types'
 import type { Task, Context } from '../types'
 
 interface TaskItemProps {
@@ -108,7 +109,7 @@ export function TaskItem({
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       className={`
-        group flex items-center gap-3 pl-4 pr-4 py-2 mx-2 cursor-pointer rounded-lg
+        group flex items-center gap-3 pl-4 pr-4 py-1 mx-2 cursor-pointer rounded-lg select-none
         ${isSelected ? 'bg-accent-blue/30' : ''}
       `}
     >
@@ -143,10 +144,12 @@ export function TaskItem({
         {task.name}
       </span>
 
-      {/* Context pills - inline with name */}
-      {contexts.length > 0 && (
+      {/* Context pills - inline with name (filter out General context) */}
+      {(() => {
+        const filteredContexts = contexts.filter(c => c.id !== GENERAL_CONTEXT_ID)
+        return filteredContexts.length > 0 && (
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {contexts.map(context => (
+          {filteredContexts.map(context => (
             <span
               key={context.id}
               className="inline-flex items-center px-2 py-0.5 text-xs text-text-secondary border border-border rounded-full"
@@ -155,7 +158,8 @@ export function TaskItem({
             </span>
           ))}
         </div>
-      )}
+        )
+      })()}
 
       {/* Blue dot for unread */}
       {task.hasUnreadAgentMessage && (

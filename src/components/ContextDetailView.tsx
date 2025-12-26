@@ -4,6 +4,7 @@ import { ContextDocumentList } from './ContextDocumentList'
 import { AILearningNotesList } from './AILearningNotesList'
 import { AILearningNoteEditor } from './AILearningNoteEditor'
 import { TaskItem } from './TaskItem'
+import { GENERAL_CONTEXT_ID } from '../types'
 import type { Task, AILearningNote } from '../types'
 
 interface ContextDetailViewProps {
@@ -195,31 +196,33 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
             onDelete={handleDeleteAINote}
           />
 
-          {/* Tasks section */}
-          <div>
-            <h2 className="text-sm font-medium text-text-secondary mb-2">
-              Tasks ({contextTasks.length})
-            </h2>
-            {contextTasks.length === 0 ? (
-              <p className="text-sm text-text-secondary/70 italic py-2">
-                No tasks in this context
-              </p>
-            ) : (
-              <div className="space-y-1">
-                {contextTasks.map(task => (
-                  <TaskItem
-                    key={task.id}
-                    task={task}
-                    onComplete={() => onTaskComplete(task.id)}
-                    onSelect={() => onTaskSelect(task)}
-                    onClick={() => onTaskSelect(task)}
-                    onDateChange={(date) => updateTask(task.id, { dateToWorkOn: date })}
-                    showDate
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Tasks section - hidden for General context since it applies to all tasks */}
+          {contextId !== GENERAL_CONTEXT_ID && (
+            <div>
+              <h2 className="text-sm font-medium text-text-secondary mb-2">
+                Tasks ({contextTasks.length})
+              </h2>
+              {contextTasks.length === 0 ? (
+                <p className="text-sm text-text-secondary/70 italic py-2">
+                  No tasks in this context
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {contextTasks.map(task => (
+                    <TaskItem
+                      key={task.id}
+                      task={task}
+                      onComplete={() => onTaskComplete(task.id)}
+                      onSelect={() => onTaskSelect(task)}
+                      onClick={() => onTaskSelect(task)}
+                      onDateChange={(date) => updateTask(task.id, { dateToWorkOn: date })}
+                      showDate
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
