@@ -24,6 +24,8 @@ interface TaskListProps {
   selectedTaskIds: Set<string>
   onTaskClick: (taskId: string, e: React.MouseEvent) => void
   onClearSelection: () => void
+  editingTaskId: string | null
+  onEditingTaskIdChange: (taskId: string | null) => void
 }
 
 interface DateGroup {
@@ -57,10 +59,9 @@ function groupTasksByDate(tasks: Task[], dateField: 'dateToWorkOn' | 'completion
     }))
 }
 
-export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSelection }: TaskListProps) {
+export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSelection, editingTaskId, onEditingTaskIdChange }: TaskListProps) {
   const {
     currentView,
-    setExaminingTask,
     setActiveTask,
     getTodayTasks,
     getUpcomingTasks,
@@ -68,7 +69,6 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
     completeTask,
     reopenTask,
     reorderTask,
-    updateTask,
     contexts,
     taskContextsByTask
   } = useTaskStore()
@@ -156,13 +156,14 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
               <SortableTaskItem
                 key={task.id}
                 task={task}
-                onSelect={() => setExaminingTask(task.id)}
                 onClick={(e) => onTaskClick(task.id, e)}
                 onComplete={() => handleTaskAction(task)}
-                onOpenChat={() => setActiveTask(task.id)}
-                onDateChange={(date) => updateTask(task.id, { dateToWorkOn: date })}
                 isSelected={selectedTaskIds.has(task.id)}
                 contexts={getTaskContexts(task.id)}
+                isEditing={editingTaskId === task.id}
+                onStartEdit={() => onEditingTaskIdChange(task.id)}
+                onCloseEdit={() => onEditingTaskIdChange(null)}
+                onExpandChat={() => setActiveTask(task.id)}
               />
             ))}
           </div>
@@ -203,13 +204,14 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
                 <TaskItem
                   key={task.id}
                   task={task}
-                  onSelect={() => setExaminingTask(task.id)}
                   onClick={(e) => onTaskClick(task.id, e)}
                   onComplete={() => handleTaskAction(task)}
-                  onOpenChat={() => setActiveTask(task.id)}
-                  onDateChange={(date) => updateTask(task.id, { dateToWorkOn: date })}
                   isSelected={selectedTaskIds.has(task.id)}
                   contexts={getTaskContexts(task.id)}
+                  isEditing={editingTaskId === task.id}
+                  onStartEdit={() => onEditingTaskIdChange(task.id)}
+                  onCloseEdit={() => onEditingTaskIdChange(null)}
+                  onExpandChat={() => setActiveTask(task.id)}
                 />
               ))}
             </div>
@@ -242,13 +244,15 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
               <TaskItem
                 key={task.id}
                 task={task}
-                onSelect={() => setExaminingTask(task.id)}
                 onClick={(e) => onTaskClick(task.id, e)}
                 onComplete={() => handleTaskAction(task)}
-                onOpenChat={() => setActiveTask(task.id)}
                 isSelected={selectedTaskIds.has(task.id)}
                 showCompletionDate
                 contexts={getTaskContexts(task.id)}
+                isEditing={editingTaskId === task.id}
+                onStartEdit={() => onEditingTaskIdChange(task.id)}
+                onCloseEdit={() => onEditingTaskIdChange(null)}
+                onExpandChat={() => setActiveTask(task.id)}
               />
             ))}
           </div>

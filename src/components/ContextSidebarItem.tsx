@@ -29,7 +29,7 @@ export function ContextSidebarItem({ context, isActive, taskCount, onSelect, onD
         <span className="text-sm text-text-secondary">#</span>
         <span className="flex-1 text-sm font-medium truncate">{context.name}</span>
         {taskCount > 0 && (
-          <span className="text-xs text-text-secondary">
+          <span className={`text-xs text-text-secondary transition-opacity ${isGeneralContext ? '' : 'group-hover:opacity-0'}`}>
             {taskCount}
           </span>
         )}

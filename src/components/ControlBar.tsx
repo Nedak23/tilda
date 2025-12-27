@@ -29,7 +29,7 @@ function TooltipButton({ onClick, tooltip, children, className = '' }: TooltipBu
         {children}
       </button>
       {showTooltip && (
-        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 bg-surface-tertiary text-text text-xs rounded whitespace-nowrap z-50 shadow-lg">
+        <div className="absolute top-full right-0 mt-2 px-2 py-1 bg-surface-tertiary text-text text-xs rounded whitespace-nowrap z-50 shadow-lg">
           {tooltip}
         </div>
       )}
@@ -45,7 +45,7 @@ export function ControlBar({
   onOpenSettings
 }: ControlBarProps) {
   return (
-    <div className="h-8 bg-surface flex items-center justify-end px-3 border-b border-border-light flex-shrink-0 relative">
+    <div className="h-9 bg-surface flex items-center justify-end px-3 border-b border-border-light flex-shrink-0 relative">
       {/* Titlebar drag area - fills the whole bar */}
       <div className="absolute inset-0 titlebar-drag" />
 
@@ -63,31 +63,31 @@ export function ControlBar({
           </svg>
         </TooltipButton>
 
-        {/* Tilda (Chat) Toggle - Left sidebar */}
+        {/* Navigation Toggle - Left sidebar */}
         <TooltipButton
-          onClick={onToggleTilda}
-          tooltip="Toggle Tilda (⌘B)"
+          onClick={onToggleNav}
+          tooltip="Toggle Navigation (⌘B)"
           className="titlebar-no-drag p-1.5 rounded text-text-tertiary hover:text-text-secondary hover:bg-surface-tertiary transition-colors"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             {/* Left panel - filled when open */}
-            <rect x="4" y="4" width="5" height="16" rx="1" fill={isTildaCollapsed ? 'none' : 'currentColor'} />
+            <rect x="4" y="4" width="5" height="16" rx="1" fill={isNavCollapsed ? 'none' : 'currentColor'} />
             {/* Right panel - always outline */}
             <rect x="9" y="4" width="11" height="16" rx="1" fill="none" />
           </svg>
         </TooltipButton>
 
-        {/* Navigation Toggle - Right sidebar */}
+        {/* Tilda (Chat) Toggle - Right sidebar */}
         <TooltipButton
-          onClick={onToggleNav}
-          tooltip="Toggle Navigation (⌥⌘B)"
+          onClick={onToggleTilda}
+          tooltip="Toggle Tilda (⌥⌘B)"
           className="titlebar-no-drag p-1.5 rounded text-text-tertiary hover:text-text-secondary hover:bg-surface-tertiary transition-colors"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             {/* Left panel - always outline */}
             <rect x="4" y="4" width="11" height="16" rx="1" fill="none" />
             {/* Right panel - filled when open */}
-            <rect x="15" y="4" width="5" height="16" rx="1" fill={isNavCollapsed ? 'none' : 'currentColor'} />
+            <rect x="15" y="4" width="5" height="16" rx="1" fill={isTildaCollapsed ? 'none' : 'currentColor'} />
           </svg>
         </TooltipButton>
       </div>
