@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { useTaskStore } from '../stores/taskStore'
 import { ChatMessage } from './ChatMessage'
 import { isFileSupported, FILE_INPUT_ACCEPT } from '../utils/fileUtils'
@@ -156,7 +156,7 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
           )}
           {task.deadline && (
             <p className="text-sm text-text-secondary mt-1">
-              Due {format(new Date(task.deadline), 'MMMM d, yyyy')}
+              Due {format(parseISO(task.deadline), 'MMMM d, yyyy')}
             </p>
           )}
           {task.description && (

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { format, differenceInDays, startOfDay } from 'date-fns'
+import { format, differenceInDays, startOfDay, parseISO } from 'date-fns'
 import { GENERAL_CONTEXT_ID } from '../types'
 import type { Task, Context } from '../types'
 
@@ -83,7 +83,7 @@ export function TaskItem({
   const deadlineInfo = (() => {
     if (!task.deadline || task.status === 'archived') return null
     const today = startOfDay(new Date())
-    const deadlineDate = startOfDay(new Date(task.deadline))
+    const deadlineDate = startOfDay(parseISO(task.deadline))
     const daysLeft = differenceInDays(deadlineDate, today)
 
     let displayText: string
@@ -182,14 +182,14 @@ export function TaskItem({
       {/* Completion date - for archive view */}
       {showCompletionDate && task.completionDate && (
         <span className="text-xs text-text-tertiary flex-shrink-0">
-          {format(new Date(task.completionDate), 'MMM d')}
+          {format(parseISO(task.completionDate), 'MMM d')}
         </span>
       )}
 
       {/* Date to work on - for context detail view */}
       {showDate && task.dateToWorkOn && task.status !== 'archived' && (
         <span className="text-xs text-text-tertiary flex-shrink-0">
-          {format(new Date(task.dateToWorkOn), 'MMM d')}
+          {format(parseISO(task.dateToWorkOn), 'MMM d')}
         </span>
       )}
 
