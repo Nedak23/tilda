@@ -197,6 +197,91 @@ export function cancelRequest(taskId: string): void {
   }
 }
 
+/**
+ * Regenerate a response for a task without creating a new user message.
+ * Used for retry functionality where the user message already exists.
+ */
+export async function regenerateResponse(
+  taskId: string,
+  onChunk: (chunk: string) => void
+): Promise<string> {
+  const task = getTaskById(taskId)
+  if (!task) throw new Error(`Task ${taskId} not found`)
+
+  // Get conversation history - the user message should already be the last one
+  const conversationHistory = getMessagesByTask(taskId)
+  if (conversationHistory.length === 0) {
+    throw new Error('No messages to regenerate from')
+  }
+
+  const lastMessage = conversationHistory[conversationHistory.length - 1]
+  if (lastMessage.sender !== 'user') {
+    throw new Error('Last message is not from user')
+  }
+
+  // Remove the last user message from history (it will be the current message)
+  const historyWithoutLast = conversationHistory.slice(0, -1)
+
+  const attachments = getAttachmentsByTask(taskId)
+
+  // Get context info (contexts, their documents, and learning notes)
+  const taskContexts = getContextsByTask(taskId)
+
+  // Always include General context for its learning notes
+  const generalContext = getContextById(GENERAL_CONTEXT_ID)
+  const allContexts = [...taskContexts]
+  if (generalContext && !taskContexts.some(c => c.id === GENERAL_CONTEXT_ID)) {
+    allContexts.push(generalContext)
+  }
+
+  const contextInfos: ContextInfo[] = allContexts.map(context => ({
+    context,
+    documents: getDocumentsByContext(context.id),
+    learningNotes: getAILearningNotesByContext(context.id)
+  }))
+
+  const client = getClient()
+  const abortController = new AbortController()
+  activeRequests.set(taskId, abortController)
+
+  try {
+    const systemPrompt = buildSystemPrompt(task.name, task.description, contextInfos)
+    const messages = buildMessages(historyWithoutLast, attachments, lastMessage.content)
+
+    let fullResponse = ''
+
+    const model = getModel()
+    const stream = await client.messages.stream({
+      model,
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages
+    }, {
+      signal: abortController.signal
+    })
+
+    for await (const event of stream) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        const text = event.delta.text
+        fullResponse += text
+        onChunk(text)
+      }
+    }
+
+    // Save agent response
+    createMessage(taskId, fullResponse, 'agent')
+
+    return fullResponse
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') {
+      throw new Error('Request cancelled')
+    }
+    throw error
+  } finally {
+    activeRequests.delete(taskId)
+  }
+}
+
 export function markTaskUnread(taskId: string): void {
   setUnreadAgentMessage(taskId)
 }

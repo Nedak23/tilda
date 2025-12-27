@@ -407,12 +407,12 @@ export function reopenTask(id: string): Task {
   const task = getTaskById(id)
   if (!task) throw new Error(`Task ${id} not found`)
 
-  const status = determineStatus(task.dateToWorkOn)
-  const sortPosition = getMaxSortPosition(status) + 1
+  const today = getTodayDateString()
+  const sortPosition = getMaxSortPosition('today') + 1
 
   db.prepare(`
-    UPDATE tasks SET status = ?, completion_date = NULL, sort_position = ? WHERE id = ?
-  `).run(status, sortPosition, id)
+    UPDATE tasks SET status = 'today', completion_date = NULL, date_to_work_on = ?, sort_position = ? WHERE id = ?
+  `).run(today, sortPosition, id)
 
   return getTaskById(id)!
 }
@@ -503,6 +503,30 @@ export function createMessage(taskId: string, content: string, sender: MessageSe
   return { id, taskId, sender, content, timestamp }
 }
 
+export function deleteMessage(id: string): void {
+  db.prepare('DELETE FROM messages WHERE id = ?').run(id)
+}
+
+export function deleteMessagesFromId(taskId: string, messageId: string): void {
+  // Get the target message to find its position
+  const targetMessage = db.prepare('SELECT id, timestamp FROM messages WHERE id = ?').get(messageId) as { id: string; timestamp: string } | undefined
+  if (!targetMessage) return
+
+  // Delete all messages in this task that come at or after this message
+  // Use timestamp AND (id comparison for same-timestamp messages via rowid ordering)
+  db.prepare(`
+    DELETE FROM messages
+    WHERE task_id = ? AND (
+      timestamp > ? OR
+      (timestamp = ? AND rowid >= (SELECT rowid FROM messages WHERE id = ?))
+    )
+  `).run(taskId, targetMessage.timestamp, targetMessage.timestamp, messageId)
+}
+
+export function updateMessageContent(id: string, content: string): void {
+  db.prepare('UPDATE messages SET content = ? WHERE id = ?').run(content, id)
+}
+
 // Attachment operations
 
 function rowToAttachment(row: Record<string, unknown>): Attachment {
@@ -576,6 +600,28 @@ export function createTildaMessage(content: string, sender: MessageSender): Tild
 
 export function clearTildaMessages(): void {
   db.prepare('DELETE FROM tilda_messages').run()
+}
+
+export function deleteTildaMessage(id: string): void {
+  db.prepare('DELETE FROM tilda_messages WHERE id = ?').run(id)
+}
+
+export function deleteTildaMessagesFromId(messageId: string): void {
+  // Get the target message to find its position
+  const targetMessage = db.prepare('SELECT id, timestamp FROM tilda_messages WHERE id = ?').get(messageId) as { id: string; timestamp: string } | undefined
+  if (!targetMessage) return
+
+  // Delete all messages that come at or after this message
+  // Use timestamp AND (rowid comparison for same-timestamp messages)
+  db.prepare(`
+    DELETE FROM tilda_messages
+    WHERE timestamp > ? OR
+      (timestamp = ? AND rowid >= (SELECT rowid FROM tilda_messages WHERE id = ?))
+  `).run(targetMessage.timestamp, targetMessage.timestamp, messageId)
+}
+
+export function updateTildaMessageContent(id: string, content: string): void {
+  db.prepare('UPDATE tilda_messages SET content = ? WHERE id = ?').run(content, id)
 }
 
 // Tilda attachment operations

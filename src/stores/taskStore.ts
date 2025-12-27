@@ -54,6 +54,8 @@ interface TaskStore {
   // Message actions
   loadMessages: (taskId: string) => Promise<void>
   sendMessage: (taskId: string, content: string) => Promise<void>
+  retryMessage: (taskId: string, messageId: string) => Promise<void>
+  editAndResendMessage: (taskId: string, messageId: string, newContent: string) => Promise<void>
 
   // Attachment actions
   loadAttachments: (taskId: string) => Promise<void>
@@ -72,6 +74,8 @@ interface TaskStore {
   loadTildaAttachments: () => Promise<void>
   addTildaAttachment: (file: File) => Promise<void>
   removeTildaAttachment: (id: string) => Promise<void>
+  retryTildaMessage: (messageId: string) => Promise<void>
+  editAndResendTildaMessage: (messageId: string, newContent: string) => Promise<void>
 
   // Context actions
   loadContexts: () => Promise<void>
@@ -410,6 +414,201 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     }
   },
 
+  retryMessage: async (taskId, messageId) => {
+    const { pendingResponses, activeTaskId } = get()
+    const messages = get().messagesByTask[taskId] || []
+    const messageIndex = messages.findIndex(m => m.id === messageId)
+    if (messageIndex === -1) return
+
+    const message = messages[messageIndex]
+
+    // Only retry LLM messages
+    if (message.sender !== 'agent') return
+
+    // Delete from the LLM message onwards (keeps the user message)
+    await window.api.messages.deleteFromId(taskId, messageId)
+
+    // Reload messages to reflect deletion
+    await get().loadMessages(taskId)
+
+    // Mark as pending
+    const newPending = new Set(pendingResponses)
+    newPending.add(taskId)
+    set({ pendingResponses: newPending })
+
+    // Track streaming response
+    let streamedContent = ''
+    const streamingMessageId = `streaming-${Date.now()}`
+
+    try {
+      // Regenerate response without creating a new user message
+      await window.api.llm.regenerateResponse(taskId, (chunk) => {
+        streamedContent += chunk
+
+        // Update streaming message
+        set(state => {
+          const msgs = state.messagesByTask[taskId] || []
+          const existingStreamIndex = msgs.findIndex(m => m.id === streamingMessageId)
+
+          const streamingMessage: Message = {
+            id: streamingMessageId,
+            taskId,
+            sender: 'agent',
+            content: streamedContent,
+            timestamp: new Date().toISOString()
+          }
+
+          if (existingStreamIndex >= 0) {
+            const newMessages = [...msgs]
+            newMessages[existingStreamIndex] = streamingMessage
+            return {
+              messagesByTask: { ...state.messagesByTask, [taskId]: newMessages }
+            }
+          } else {
+            return {
+              messagesByTask: {
+                ...state.messagesByTask,
+                [taskId]: [...msgs, streamingMessage]
+              }
+            }
+          }
+        })
+      })
+
+      // Reload messages to get persisted versions
+      await get().loadMessages(taskId)
+
+      // If user navigated away, task might have unread flag
+      if (activeTaskId !== taskId) {
+        await get().loadTasks()
+      }
+    } catch (error) {
+      const errorMessage = (error as Error).message
+      set({ error: errorMessage })
+
+      // Show error as a message in the chat
+      const errorDisplayMessage: Message = {
+        id: crypto.randomUUID(),
+        taskId,
+        sender: 'agent',
+        content: `Error: ${errorMessage}`,
+        timestamp: new Date().toISOString()
+      }
+
+      set(state => ({
+        messagesByTask: {
+          ...state.messagesByTask,
+          [taskId]: [...(state.messagesByTask[taskId] || []), errorDisplayMessage]
+        }
+      }))
+    } finally {
+      // Remove from pending
+      const updatedPending = new Set(get().pendingResponses)
+      updatedPending.delete(taskId)
+      set({ pendingResponses: updatedPending })
+    }
+  },
+
+  editAndResendMessage: async (taskId, messageId, newContent) => {
+    const { pendingResponses, activeTaskId } = get()
+    const messages = get().messagesByTask[taskId] || []
+    const messageIndex = messages.findIndex(m => m.id === messageId)
+    if (messageIndex === -1) return
+
+    const message = messages[messageIndex]
+    if (message.sender !== 'user') return
+
+    // Update the user message content
+    await window.api.messages.update(messageId, newContent)
+
+    // Find and delete any messages after this one (the LLM response and any subsequent messages)
+    const nextMessageIndex = messageIndex + 1
+    if (nextMessageIndex < messages.length) {
+      const nextMessage = messages[nextMessageIndex]
+      await window.api.messages.deleteFromId(taskId, nextMessage.id)
+    }
+
+    // Reload messages to reflect changes
+    await get().loadMessages(taskId)
+
+    // Mark as pending
+    const newPending = new Set(pendingResponses)
+    newPending.add(taskId)
+    set({ pendingResponses: newPending })
+
+    // Track streaming response
+    let streamedContent = ''
+    const streamingMessageId = `streaming-${Date.now()}`
+
+    try {
+      // Regenerate response without creating a new user message
+      await window.api.llm.regenerateResponse(taskId, (chunk) => {
+        streamedContent += chunk
+
+        // Update streaming message
+        set(state => {
+          const msgs = state.messagesByTask[taskId] || []
+          const existingStreamIndex = msgs.findIndex(m => m.id === streamingMessageId)
+
+          const streamingMessage: Message = {
+            id: streamingMessageId,
+            taskId,
+            sender: 'agent',
+            content: streamedContent,
+            timestamp: new Date().toISOString()
+          }
+
+          if (existingStreamIndex >= 0) {
+            const newMessages = [...msgs]
+            newMessages[existingStreamIndex] = streamingMessage
+            return {
+              messagesByTask: { ...state.messagesByTask, [taskId]: newMessages }
+            }
+          } else {
+            return {
+              messagesByTask: {
+                ...state.messagesByTask,
+                [taskId]: [...msgs, streamingMessage]
+              }
+            }
+          }
+        })
+      })
+
+      // Reload messages to get persisted versions
+      await get().loadMessages(taskId)
+
+      // If user navigated away, task might have unread flag
+      if (activeTaskId !== taskId) {
+        await get().loadTasks()
+      }
+    } catch (error) {
+      const errorMessage = (error as Error).message
+      set({ error: errorMessage })
+
+      // Show error as a message in the chat
+      const errorDisplayMessage: Message = {
+        id: crypto.randomUUID(),
+        taskId,
+        sender: 'agent',
+        content: `Error: ${errorMessage}`,
+        timestamp: new Date().toISOString()
+      }
+
+      set(state => ({
+        messagesByTask: {
+          ...state.messagesByTask,
+          [taskId]: [...(state.messagesByTask[taskId] || []), errorDisplayMessage]
+        }
+      }))
+    } finally {
+      // Remove from pending
+      const updatedPending = new Set(get().pendingResponses)
+      updatedPending.delete(taskId)
+      set({ pendingResponses: updatedPending })
+    }
+  },
+
   // Attachment actions
   loadAttachments: async (taskId) => {
     try {
@@ -583,6 +782,115 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     } catch (error) {
       set({ error: (error as Error).message })
       throw error
+    }
+  },
+
+  retryTildaMessage: async (messageId) => {
+    const messages = get().tildaMessages
+    const messageIndex = messages.findIndex(m => m.id === messageId)
+    if (messageIndex === -1) return
+
+    const message = messages[messageIndex]
+
+    // Only retry LLM messages
+    if (message.sender !== 'agent') return
+
+    // Delete from the LLM message onwards (keeps the user message)
+    await window.api.tilda.deleteMessagesFromId(messageId)
+
+    // Reload messages to reflect deletion
+    await get().loadTildaMessages()
+
+    // Mark as pending
+    set({ isTildaPending: true, tildaStreamingContent: '' })
+
+    // Track streaming response
+    let streamedContent = ''
+
+    try {
+      // Regenerate response without creating a new user message
+      await window.api.tilda.regenerateResponse((chunk) => {
+        streamedContent += chunk
+        set({ tildaStreamingContent: streamedContent })
+      })
+
+      // Reload messages to get persisted versions and refresh tasks (tools may have modified them)
+      await get().loadTildaMessages()
+      await get().loadTasks()
+    } catch (error) {
+      const errorMessage = (error as Error).message
+      set({ error: errorMessage })
+
+      // Show error as a message
+      const errorDisplayMessage: TildaMessage = {
+        id: crypto.randomUUID(),
+        sender: 'agent',
+        content: `Error: ${errorMessage}`,
+        timestamp: new Date().toISOString()
+      }
+
+      set(state => ({
+        tildaMessages: [...state.tildaMessages, errorDisplayMessage]
+      }))
+    } finally {
+      set({ isTildaPending: false, tildaStreamingContent: '' })
+    }
+  },
+
+  editAndResendTildaMessage: async (messageId, newContent) => {
+    const messages = get().tildaMessages
+    const messageIndex = messages.findIndex(m => m.id === messageId)
+    if (messageIndex === -1) return
+
+    const message = messages[messageIndex]
+    if (message.sender !== 'user') return
+
+    // Update the user message content
+    await window.api.tilda.updateMessage(messageId, newContent)
+
+    // Find and delete any messages after this one
+    const nextMessageIndex = messageIndex + 1
+    if (nextMessageIndex < messages.length) {
+      const nextMessage = messages[nextMessageIndex]
+      await window.api.tilda.deleteMessagesFromId(nextMessage.id)
+    }
+
+    // Reload messages to reflect changes
+    await get().loadTildaMessages()
+
+    // Mark as pending
+    set({ isTildaPending: true, tildaStreamingContent: '' })
+
+    // Track streaming response
+    let streamedContent = ''
+
+    try {
+      // Regenerate response without creating a new user message
+      await window.api.tilda.regenerateResponse((chunk) => {
+        streamedContent += chunk
+        set({ tildaStreamingContent: streamedContent })
+      })
+
+      // Reload messages to get persisted versions and refresh tasks (tools may have modified them)
+      await get().loadTildaMessages()
+      await get().loadTasks()
+    } catch (error) {
+      const errorMessage = (error as Error).message
+      set({ error: errorMessage })
+
+      // Show error as a message
+      const errorDisplayMessage: TildaMessage = {
+        id: crypto.randomUUID(),
+        sender: 'agent',
+        content: `Error: ${errorMessage}`,
+        timestamp: new Date().toISOString()
+      }
+
+      set(state => ({
+        tildaMessages: [...state.tildaMessages, errorDisplayMessage]
+      }))
+    } finally {
+      set({ isTildaPending: false, tildaStreamingContent: '' })
     }
   },
 

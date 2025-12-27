@@ -17,12 +17,18 @@ import {
   migrateTasksToToday,
   getMessagesByTask,
   createMessage,
+  deleteMessage,
+  deleteMessagesFromId,
+  updateMessageContent,
   getAttachmentsByTask,
   createAttachment,
   deleteAttachment,
   setUnreadAgentMessage,
   getTildaMessages,
   clearTildaMessages,
+  deleteTildaMessage,
+  deleteTildaMessagesFromId,
+  updateTildaMessageContent,
   getTildaAttachments,
   createTildaAttachment,
   deleteTildaAttachment,
@@ -46,8 +52,8 @@ import {
   deleteAILearningNote
 } from './database'
 import { completeTaskWithLearning } from './learning-check'
-import { sendMessage, cancelRequest } from './llm'
-import { sendTildaMessage, cancelTildaRequest } from './tilda'
+import { sendMessage, cancelRequest, regenerateResponse } from './llm'
+import { sendTildaMessage, cancelTildaRequest, regenerateTildaResponse } from './tilda'
 import { getSettings, saveSettings, type Settings } from './settings'
 import type { CreateTaskInput, UpdateTaskInput, MessageSender, CreateContextInput, UpdateContextInput, CreateAILearningNoteInput, UpdateAILearningNoteInput } from '../src/types'
 
@@ -143,6 +149,18 @@ ipcMain.handle('messages:create', (_event, taskId: string, content: string, send
   return createMessage(taskId, content, sender)
 })
 
+ipcMain.handle('messages:delete', (_event, id: string) => {
+  deleteMessage(id)
+})
+
+ipcMain.handle('messages:deleteFromId', (_event, taskId: string, messageId: string) => {
+  deleteMessagesFromId(taskId, messageId)
+})
+
+ipcMain.handle('messages:update', (_event, id: string, content: string) => {
+  updateMessageContent(id, content)
+})
+
 // IPC Handlers for Attachments
 ipcMain.handle('attachments:getByTask', (_event, taskId: string) => {
   return getAttachmentsByTask(taskId)
@@ -179,6 +197,23 @@ ipcMain.handle('llm:sendMessage', async (event, taskId: string, userMessage: str
 
 ipcMain.on('llm:cancel', (_event, taskId: string) => {
   cancelRequest(taskId)
+})
+
+ipcMain.handle('llm:regenerateResponse', async (event, taskId: string, channel: string) => {
+  try {
+    const response = await regenerateResponse(taskId, (chunk: string) => {
+      event.sender.send(channel, chunk)
+    })
+
+    // If user navigated away during processing, mark as unread
+    if (activeTaskId !== taskId) {
+      setUnreadAgentMessage(taskId)
+    }
+
+    return response
+  } catch (error) {
+    throw error
+  }
 })
 
 // Track active task from renderer
@@ -222,6 +257,29 @@ ipcMain.handle('tilda:clearHistory', async () => {
     return { success: true }
   } catch (error) {
     console.error('Failed to clear Tilda history:', error)
+    throw error
+  }
+})
+
+ipcMain.handle('tilda:deleteMessage', (_event, id: string) => {
+  deleteTildaMessage(id)
+})
+
+ipcMain.handle('tilda:deleteMessagesFromId', (_event, messageId: string) => {
+  deleteTildaMessagesFromId(messageId)
+})
+
+ipcMain.handle('tilda:updateMessage', (_event, id: string, content: string) => {
+  updateTildaMessageContent(id, content)
+})
+
+ipcMain.handle('tilda:regenerateResponse', async (event, channel: string) => {
+  try {
+    const response = await regenerateTildaResponse((chunk: string) => {
+      event.sender.send(channel, chunk)
+    })
+    return response
+  } catch (error) {
     throw error
   }
 })

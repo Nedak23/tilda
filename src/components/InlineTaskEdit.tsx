@@ -100,6 +100,11 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        // Don't close when clicking on control bar buttons (sidebar toggles)
+        const target = e.target as HTMLElement
+        if (target.closest('.titlebar-no-drag')) {
+          return
+        }
         handleSaveAndClose()
       }
     }
@@ -603,7 +608,7 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
             title="Send message"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
             </svg>
           </button>
         </div>

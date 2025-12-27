@@ -697,3 +697,114 @@ export function cancelTildaRequest(): void {
     abortController = null
   }
 }
+
+/**
+ * Regenerate a response for Tilda without creating a new user message.
+ * Used for retry functionality where the user message already exists.
+ */
+export async function regenerateTildaResponse(
+  onChunk: (chunk: string) => void
+): Promise<string> {
+  // Get conversation history - the user message should already be the last one
+  const history = getTildaMessages()
+  if (history.length === 0) {
+    throw new Error('No messages to regenerate from')
+  }
+
+  const lastMessage = history[history.length - 1]
+  if (lastMessage.sender !== 'user') {
+    throw new Error('Last message is not from user')
+  }
+
+  // Get history without the last user message (it will be the current message)
+  const historyWithoutLast = history.slice(0, -1)
+
+  // Get attachments for this message
+  const attachments = getTildaAttachments()
+
+  const client = getClient()
+  abortController = new AbortController()
+
+  try {
+    let messages = buildMessages(historyWithoutLast, lastMessage.content, attachments)
+    const model = getModel()
+    const systemPrompt = buildSystemPromptWithAttachments(attachments)
+
+    // Tool-calling loop
+    while (true) {
+      const response = await client.messages.create({
+        model,
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages,
+        tools: TILDA_TOOLS
+      }, {
+        signal: abortController.signal
+      })
+
+      // Check if we need to handle tool calls
+      if (response.stop_reason === 'tool_use') {
+        // Find all tool use blocks
+        const toolUseBlocks = response.content.filter(
+          (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use'
+        )
+
+        // Also capture any text that came before tool use
+        const textBlocks = response.content.filter(
+          (block): block is Anthropic.TextBlock => block.type === 'text'
+        )
+
+        // Stream any text content
+        for (const textBlock of textBlocks) {
+          onChunk(textBlock.text)
+        }
+
+        // Add assistant message with tool use to conversation
+        messages.push({
+          role: 'assistant',
+          content: response.content
+        })
+
+        // Execute tools and add results
+        const toolResults: Anthropic.ToolResultBlockParam[] = []
+        for (const toolUse of toolUseBlocks) {
+          const result = executeToolCall(toolUse.name, toolUse.input as ToolInput)
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: toolUse.id,
+            content: result
+          })
+        }
+
+        messages.push({
+          role: 'user',
+          content: toolResults
+        })
+
+        // Continue the loop to get the next response
+        continue
+      }
+
+      // No more tool calls - extract and return final text response
+      let fullResponse = ''
+      for (const block of response.content) {
+        if (block.type === 'text') {
+          fullResponse += block.text
+          onChunk(block.text)
+        }
+      }
+
+      // Save agent response
+      createTildaMessage(fullResponse, 'agent')
+
+      return fullResponse
+    }
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') {
+      throw new Error('Request cancelled')
+    }
+    throw error
+  } finally {
+    abortController = null
+  }
+}

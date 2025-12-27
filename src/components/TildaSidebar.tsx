@@ -4,35 +4,198 @@ import { useTaskStore } from '../stores/taskStore'
 import { isFileSupported, FILE_INPUT_ACCEPT } from '../utils/fileUtils'
 import type { TildaMessage } from '../types'
 
+const MAX_CHARS_BEFORE_TRUNCATE = 500
+
 interface TildaSidebarProps {
   isOpen: boolean
 }
 
-function TildaChatMessage({ message, isStreaming = false }: { message: TildaMessage; isStreaming?: boolean }) {
-  const isUser = message.sender === 'user'
+interface TildaChatMessageProps {
+  message: TildaMessage
+  isStreaming?: boolean
+  onRetry?: (messageId: string) => void
+  onEdit?: (messageId: string, newContent: string) => void
+}
 
-  return (
-    <div
-      className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in`}
-    >
+function TildaChatMessage({ message, isStreaming = false, onRetry, onEdit }: TildaChatMessageProps) {
+  const isUser = message.sender === 'user'
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editContent, setEditContent] = useState(message.content)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const shouldTruncate = isUser && message.content.length > MAX_CHARS_BEFORE_TRUNCATE && !isExpanded
+  const displayContent = shouldTruncate
+    ? message.content.slice(0, MAX_CHARS_BEFORE_TRUNCATE) + '...'
+    : message.content
+
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+      textareaRef.current.focus()
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px'
+    }
+  }, [isEditing])
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(message.content)
+  }
+
+  const handleRetry = () => {
+    onRetry?.(message.id)
+  }
+
+  const handleEditStart = () => {
+    setEditContent(message.content)
+    setIsEditing(true)
+  }
+
+  const handleEditCancel = () => {
+    setIsEditing(false)
+    setEditContent(message.content)
+  }
+
+  const handleEditSubmit = () => {
+    if (editContent.trim() && editContent !== message.content) {
+      onEdit?.(message.id, editContent.trim())
+    }
+    setIsEditing(false)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleEditSubmit()
+    } else if (e.key === 'Escape') {
+      handleEditCancel()
+    }
+  }
+
+  if (isUser) {
+    // User message - grey box with hover actions
+    return (
       <div
-        className={`
-          max-w-[85%] px-3 py-2 rounded-2xl
-          ${isUser
-            ? 'bg-accent-blue text-white rounded-br-md'
-            : 'bg-surface-tertiary text-text rounded-bl-md'
-          }
-        `}
+        className="flex justify-start animate-fade-in relative group"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
-        <div className="text-sm whitespace-pre-wrap break-words">
+        <div className="max-w-[85%] relative">
+          {/* Hover action bar */}
+          {isHovered && !isEditing && (
+            <div className="absolute -top-7 right-0 flex items-center gap-1 bg-surface-secondary rounded-lg px-2 py-1 shadow-lg z-10">
+              <span className="text-2xs text-text-tertiary mr-1">
+                {format(new Date(message.timestamp), 'MMM d')}
+              </span>
+              <button
+                onClick={handleEditStart}
+                className="p-1 text-text-tertiary hover:text-text-secondary transition-colors"
+                title="Edit"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+              <button
+                onClick={handleCopy}
+                className="p-1 text-text-tertiary hover:text-text-secondary transition-colors"
+                title="Copy"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </button>
+            </div>
+          )}
+
+          {/* Message content */}
+          <div className="bg-surface-tertiary px-3 py-2 rounded-2xl rounded-bl-md">
+            {isEditing ? (
+              <div className="flex flex-col gap-2">
+                <textarea
+                  ref={textareaRef}
+                  value={editContent}
+                  onChange={(e) => {
+                    setEditContent(e.target.value)
+                    e.target.style.height = 'auto'
+                    e.target.style.height = e.target.scrollHeight + 'px'
+                  }}
+                  onKeyDown={handleKeyDown}
+                  className="w-full bg-surface-secondary text-text text-sm rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-accent-blue min-h-[60px]"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={handleEditCancel}
+                    className="text-xs text-text-tertiary hover:text-text-secondary px-2 py-1"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleEditSubmit}
+                    className="text-xs bg-accent-blue text-white px-3 py-1 rounded-md hover:bg-blue-600 transition-colors"
+                  >
+                    Save & Resend
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="text-sm text-text whitespace-pre-wrap break-words">
+                  {displayContent}
+                </div>
+                {message.content.length > MAX_CHARS_BEFORE_TRUNCATE && (
+                  <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="text-xs text-accent-blue hover:underline mt-1"
+                  >
+                    {isExpanded ? 'Show less' : 'Show more'}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // LLM message - no background, with action buttons at bottom
+  return (
+    <div className="flex justify-start animate-fade-in">
+      <div className="max-w-[85%]">
+        <div className="text-sm text-text whitespace-pre-wrap break-words">
           {message.content}
           {isStreaming && (
             <span className="inline-block w-1.5 h-4 bg-current ml-0.5 animate-pulse" />
           )}
         </div>
-        {!isUser && (
-          <div className="text-2xs mt-1 text-text-tertiary">
-            {format(new Date(message.timestamp), 'h:mm a')}
+
+        {/* Bottom action bar - always visible for completed messages */}
+        {!isStreaming && (
+          <div className="flex items-center gap-3 mt-2">
+            <span className="text-2xs text-text-tertiary">
+              {format(new Date(message.timestamp), 'h:mm a')}
+            </span>
+            <button
+              onClick={handleCopy}
+              className="flex items-center gap-1 text-2xs text-text-tertiary hover:text-text-secondary transition-colors"
+              title="Copy"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              <span>Copy</span>
+            </button>
+            <button
+              onClick={handleRetry}
+              className="flex items-center gap-1 text-2xs text-text-tertiary hover:text-text-secondary transition-colors"
+              title="Retry"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>Retry</span>
+            </button>
           </div>
         )}
       </div>
@@ -56,7 +219,9 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
     sendTildaMessage,
     clearTildaHistory,
     addTildaAttachment,
-    removeTildaAttachment
+    removeTildaAttachment,
+    retryTildaMessage,
+    editAndResendTildaMessage
   } = useTaskStore()
 
   // Load messages and attachments when sidebar opens
@@ -140,7 +305,12 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
         )}
 
         {tildaMessages.map((message) => (
-          <TildaChatMessage key={message.id} message={message} />
+          <TildaChatMessage
+            key={message.id}
+            message={message}
+            onRetry={retryTildaMessage}
+            onEdit={editAndResendTildaMessage}
+          />
         ))}
 
         {/* Streaming response */}
@@ -228,7 +398,7 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
             className="p-1.5 rounded-lg bg-surface-button text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-surface-buttonHover transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
             </svg>
           </button>
         </div>

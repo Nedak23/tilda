@@ -48,12 +48,29 @@ export function SortableTaskItem({
     zIndex: isDragging ? 1 : 0
   }
 
+  // Intercept pointer down to prevent dnd-kit from capturing when modifier keys are pressed
+  const handlePointerDown = (e: React.PointerEvent) => {
+    // When shift/cmd/ctrl is pressed, don't let dnd-kit handle the event at all
+    if (e.shiftKey || e.metaKey || e.ctrlKey) {
+      // Don't call dnd-kit's handler - let the event propagate naturally to onClick
+      return
+    }
+    // Otherwise, call dnd-kit's handler
+    listeners?.onPointerDown?.(e)
+  }
+
+  // Spread listeners but override onPointerDown with our custom handler
+  const { onPointerDown: _originalPointerDown, ...restListeners } = listeners || {}
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...listeners}
+      {...restListeners}
+      onPointerDown={handlePointerDown}
+      tabIndex={-1}
+      className="outline-none"
     >
       <TaskItem
         task={task}
