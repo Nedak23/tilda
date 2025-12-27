@@ -3,8 +3,7 @@ import { useTaskStore } from './stores/taskStore'
 import { Sidebar } from './components/Sidebar'
 import { TaskList } from './components/TaskList'
 import { TaskChat } from './components/TaskChat'
-import { TaskModal } from './components/TaskModal'
-import { InlineTaskCreate } from './components/InlineTaskCreate'
+import { InlineTaskEdit } from './components/InlineTaskEdit'
 import { SettingsModal } from './components/SettingsModal'
 import { TildaSidebar } from './components/TildaSidebar'
 import { ContextDetailView } from './components/ContextDetailView'
@@ -17,18 +16,19 @@ function App() {
   const {
     currentView,
     activeTaskId,
-    examiningTaskId,
     tasks,
     isLoading,
     loadTasks,
     loadContexts,
     completeTask,
     setActiveTask,
-    setExaminingTask,
     contexts,
     loadTaskContexts,
     taskContextsByTask,
-    updateTask
+    updateTask,
+    deleteTasks,
+    restoreDeletedTasks,
+    clearDeletedTasks
   } = useTaskStore()
 
   const {
@@ -49,8 +49,11 @@ function App() {
   const [notification, setNotification] = useState<{ message: string; contextId: string } | null>(null)
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
   const [showDatePicker, setShowDatePicker] = useState(false)
+  const [deleteNotification, setDeleteNotification] = useState<{ count: number } | null>(null)
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const lastSelectedTaskId = useRef<string | null>(null)
   const datePickerRef = useRef<HTMLDivElement>(null)
+  const deleteTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     loadTasks()
@@ -79,46 +82,7 @@ function App() {
     })
   }, [tasks, taskContextsByTask, loadTaskContexts])
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl + N to create new task
-      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
-        e.preventDefault()
-        if (!activeTaskId && currentView !== 'archive') {
-          setIsCreatingTask(true)
-        }
-      }
-      // Escape to go back or cancel creation or clear selection
-      if (e.key === 'Escape') {
-        if (isCreatingTask) {
-          setIsCreatingTask(false)
-        } else if (selectedTaskIds.size > 0) {
-          setSelectedTaskIds(new Set())
-        } else if (activeTaskId) {
-          setActiveTask(null)
-        } else if (examiningTaskId) {
-          setExaminingTask(null)
-        }
-      }
-      // Cmd/Ctrl + B to toggle Tilda (left sidebar)
-      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key === 'b') {
-        e.preventDefault()
-        toggleTilda()
-      }
-      // Cmd/Ctrl + Option/Alt + B to toggle Navigation (right sidebar)
-      if ((e.metaKey || e.ctrlKey) && e.altKey && e.key === 'b') {
-        e.preventDefault()
-        toggleNav()
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activeTaskId, examiningTaskId, isCreatingTask, currentView, selectedTaskIds.size, setActiveTask, setExaminingTask, toggleTilda, toggleNav])
-
   const activeTask = tasks.find(t => t.id === activeTaskId)
-  const examiningTask = tasks.find(t => t.id === examiningTaskId)
 
   // Get visible tasks for range selection
   const getVisibleTasks = useCallback(() => {
@@ -167,22 +131,95 @@ function App() {
       setSelectedTaskIds(newSelection)
       lastSelectedTaskId.current = taskId
     } else {
-      // Regular click on already-selected task: open detail view
-      if (selectedTaskIds.has(taskId) && selectedTaskIds.size === 1) {
-        setExaminingTask(taskId)
-        setSelectedTaskIds(new Set())
-      } else {
-        // Regular click: select only this task
-        setSelectedTaskIds(new Set([taskId]))
-        lastSelectedTaskId.current = taskId
-      }
+      // Regular click: select only this task (double-click opens inline edit via TaskItem)
+      setSelectedTaskIds(new Set([taskId]))
+      lastSelectedTaskId.current = taskId
     }
-  }, [getVisibleTasks, selectedTaskIds, setExaminingTask])
+  }, [getVisibleTasks, selectedTaskIds])
 
   // Clear selection when clicking empty space
   const handleClearSelection = useCallback(() => {
     setSelectedTaskIds(new Set())
   }, [])
+
+  // Handle delete selected tasks
+  const handleDeleteSelected = useCallback(async () => {
+    if (selectedTaskIds.size === 0) return
+
+    // Clear any existing delete timer
+    if (deleteTimerRef.current) {
+      clearTimeout(deleteTimerRef.current)
+    }
+
+    const count = selectedTaskIds.size
+    await deleteTasks(Array.from(selectedTaskIds))
+    setSelectedTaskIds(new Set())
+
+    // Show notification
+    setDeleteNotification({ count })
+
+    // Clear deleted tasks after 10 seconds
+    deleteTimerRef.current = setTimeout(() => {
+      clearDeletedTasks()
+      setDeleteNotification(null)
+    }, 10000)
+  }, [selectedTaskIds, deleteTasks, clearDeletedTasks])
+
+  // Handle undo delete
+  const handleUndoDelete = useCallback(async () => {
+    if (deleteTimerRef.current) {
+      clearTimeout(deleteTimerRef.current)
+    }
+
+    await restoreDeletedTasks()
+    setDeleteNotification(null)
+  }, [restoreDeletedTasks])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + N to create new task
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault()
+        if (!activeTaskId && currentView !== 'archive') {
+          setIsCreatingTask(true)
+        }
+      }
+      // Escape to go back or cancel creation or clear selection
+      if (e.key === 'Escape') {
+        if (isCreatingTask) {
+          setIsCreatingTask(false)
+        } else if (selectedTaskIds.size > 0) {
+          setSelectedTaskIds(new Set())
+        } else if (activeTaskId) {
+          setActiveTask(null)
+        }
+      }
+      // Cmd/Ctrl + B to toggle Navigation (left sidebar)
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.code === 'KeyB') {
+        e.preventDefault()
+        toggleNav()
+      }
+      // Cmd/Ctrl + Option/Alt + B to toggle Tilda (right sidebar)
+      if ((e.metaKey || e.ctrlKey) && e.altKey && e.code === 'KeyB') {
+        e.preventDefault()
+        toggleTilda()
+      }
+      // Delete or Backspace to delete selected tasks
+      // Only trigger if not focused on an input element
+      const activeElement = document.activeElement
+      const isInputFocused = activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        activeElement?.getAttribute('contenteditable') === 'true'
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedTaskIds.size > 0 && !isCreatingTask && !editingTaskId && !isInputFocused) {
+        e.preventDefault()
+        handleDeleteSelected()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [activeTaskId, isCreatingTask, currentView, selectedTaskIds.size, setActiveTask, toggleTilda, toggleNav, handleDeleteSelected, editingTaskId])
 
   // Handle date change for selected tasks
   const handleBulkDateChange = useCallback(async (date: string) => {
@@ -215,6 +252,13 @@ function App() {
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [showDatePicker])
+
+  // Cleanup delete timer on unmount
+  useEffect(() => {
+    return () => {
+      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current)
+    }
+  }, [])
 
   // Check if we're viewing a context
   const isContextView = currentView.startsWith('context:')
@@ -264,7 +308,7 @@ function App() {
         <>
           <ContextDetailView
             contextId={currentContextId}
-            onTaskSelect={(task) => setExaminingTask(task.id)}
+            onTaskSelect={(task) => setActiveTask(task.id)}
             onTaskComplete={(id) => completeTask(id)}
           />
         </>
@@ -283,7 +327,7 @@ function App() {
 
           {/* Inline task creation */}
           {isCreatingTask && (
-            <InlineTaskCreate
+            <InlineTaskEdit
               onClose={() => setIsCreatingTask(false)}
             />
           )}
@@ -295,6 +339,8 @@ function App() {
               selectedTaskIds={selectedTaskIds}
               onTaskClick={handleTaskClick}
               onClearSelection={handleClearSelection}
+              editingTaskId={editingTaskId}
+              onEditingTaskIdChange={setEditingTaskId}
             />
           </div>
 
@@ -370,31 +416,22 @@ function App() {
       <div className="flex-1 min-h-0 flex">
         <PanelLayout
           leftPanel={
-            <TildaSidebar isOpen={!isTildaCollapsed} />
+            <Sidebar />
           }
           centerPanel={mainContent}
           rightPanel={
-            <Sidebar />
+            <TildaSidebar isOpen={!isTildaCollapsed} />
           }
-          isLeftCollapsed={isTildaCollapsed}
-          isRightCollapsed={isNavCollapsed}
-          onLeftCollapseChange={setTildaCollapsed}
-          onRightCollapseChange={setNavCollapsed}
-          leftSize={tildaSize}
-          rightSize={navSize}
-          onLeftSizeChange={setTildaSize}
-          onRightSizeChange={setNavSize}
+          isLeftCollapsed={isNavCollapsed}
+          isRightCollapsed={isTildaCollapsed}
+          onLeftCollapseChange={setNavCollapsed}
+          onRightCollapseChange={setTildaCollapsed}
+          leftSize={navSize}
+          rightSize={tildaSize}
+          onLeftSizeChange={setNavSize}
+          onRightSizeChange={setTildaSize}
         />
       </div>
-
-      {/* Task Modal */}
-      {examiningTask && (
-        <TaskModal
-          task={examiningTask}
-          onClose={() => setExaminingTask(null)}
-          onExpandChat={() => setActiveTask(examiningTask.id)}
-        />
-      )}
 
       {/* Settings Modal */}
       {isSettingsOpen && (
@@ -411,6 +448,33 @@ function App() {
             className="p-1 text-text-secondary hover:text-text"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Delete Undo Notification */}
+      {deleteNotification && (
+        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2.5 px-3.5 py-2.5 bg-surface-secondary border border-border-light rounded-lg shadow-xl animate-slide-up">
+          <span className="text-sm text-text">
+            {deleteNotification.count === 1 ? '1 task deleted' : `${deleteNotification.count} tasks deleted`}
+          </span>
+          <button
+            onClick={handleUndoDelete}
+            className="text-sm text-accent-blue hover:text-accent-blue/80 font-medium"
+          >
+            Undo
+          </button>
+          <button
+            onClick={() => {
+              if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current)
+              clearDeletedTasks()
+              setDeleteNotification(null)
+            }}
+            className="p-0.5 text-text-secondary hover:text-text"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>

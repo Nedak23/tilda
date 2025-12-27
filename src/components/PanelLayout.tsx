@@ -124,13 +124,13 @@ export function PanelLayout({
       id="tilda-sidebar-layout"
       className="h-full w-full"
     >
-      {/* Left: Tilda Chat Sidebar */}
+      {/* Left: Navigation Sidebar */}
       <Panel
         panelRef={setLeftPanelHandle as React.Ref<PanelImperativeHandle>}
-        id="tilda-sidebar"
-        defaultSize="40%"
-        minSize="260px"
-        maxSize="480px"
+        id="nav-sidebar"
+        defaultSize="13%"
+        minSize="180px"
+        maxSize="320px"
         collapsible
         collapsedSize="0px"
         onResize={handleLeftResize}
@@ -153,13 +153,13 @@ export function PanelLayout({
 
       <Separator className="w-1 bg-border-light hover:bg-accent-blue transition-colors cursor-col-resize" />
 
-      {/* Right: Navigation Sidebar */}
+      {/* Right: Tilda Chat Sidebar */}
       <Panel
         panelRef={setRightPanelHandle as React.Ref<PanelImperativeHandle>}
-        id="nav-sidebar"
-        defaultSize="13%"
-        minSize="180px"
-        maxSize="320px"
+        id="tilda-sidebar"
+        defaultSize="40%"
+        minSize="260px"
+        maxSize="480px"
         collapsible
         collapsedSize="0px"
         onResize={handleRightResize}

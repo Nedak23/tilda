@@ -6,10 +6,12 @@ interface TaskStore {
   // State
   tasks: Task[]
   activeTaskId: string | null
-  examiningTaskId: string | null
   currentView: ViewType
   isLoading: boolean
   error: string | null
+
+  // Deleted tasks for undo (with their original indices)
+  deletedTasks: { task: Task; index: number }[]
 
   // Messages state per task
   messagesByTask: Record<string, Message[]>
@@ -35,7 +37,6 @@ interface TaskStore {
   // View actions
   setCurrentView: (view: ViewType) => void
   setActiveTask: (taskId: string | null) => void
-  setExaminingTask: (taskId: string | null) => void
 
   // Task actions
   loadTasks: () => Promise<void>
@@ -44,6 +45,9 @@ interface TaskStore {
   completeTask: (id: string) => Promise<void>
   reopenTask: (id: string) => Promise<void>
   deleteTask: (id: string) => Promise<void>
+  deleteTasks: (ids: string[]) => Promise<Task[]>
+  restoreDeletedTasks: () => Promise<void>
+  clearDeletedTasks: () => void
   reorderTask: (id: string, newPosition: number) => Promise<void>
   clearUnread: (id: string) => Promise<void>
 
@@ -99,10 +103,10 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   // Initial state
   tasks: [],
   activeTaskId: null,
-  examiningTaskId: null,
   currentView: 'today',
   isLoading: false,
   error: null,
+  deletedTasks: [],
   messagesByTask: {},
   attachmentsByTask: {},
   pendingResponses: new Set(),
@@ -117,22 +121,11 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
   // View actions
   setCurrentView: (view) => {
-    set({ currentView: view, activeTaskId: null, examiningTaskId: null })
-  },
-
-  setExaminingTask: async (taskId) => {
-    set({ examiningTaskId: taskId })
-
-    if (taskId) {
-      // Load attachments if not loaded (needed for detail view)
-      if (!get().attachmentsByTask[taskId]) {
-        await get().loadAttachments(taskId)
-      }
-    }
+    set({ currentView: view, activeTaskId: null })
   },
 
   setActiveTask: async (taskId) => {
-    set({ activeTaskId: taskId, examiningTaskId: null })
+    set({ activeTaskId: taskId })
 
     if (taskId) {
       // Clear unread indicator
@@ -166,7 +159,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   createTask: async (input) => {
     try {
       const task = await window.api.tasks.create(input)
-      set(state => ({ tasks: [...state.tasks, task] }))
+      set(state => ({ tasks: [task, ...state.tasks] }))
       return task
     } catch (error) {
       set({ error: (error as Error).message })
@@ -224,6 +217,66 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       set({ error: (error as Error).message })
       throw error
     }
+  },
+
+  deleteTasks: async (ids) => {
+    try {
+      // Store tasks with their original indices before deleting for undo
+      const currentTasks = get().tasks
+      const tasksToDelete: { task: Task; index: number }[] = []
+      currentTasks.forEach((task, index) => {
+        if (ids.includes(task.id)) {
+          tasksToDelete.push({ task, index })
+        }
+      })
+
+      // Delete all tasks
+      await Promise.all(ids.map(id => window.api.tasks.delete(id)))
+
+      set(state => ({
+        tasks: state.tasks.filter(t => !ids.includes(t.id)),
+        activeTaskId: ids.includes(state.activeTaskId || '') ? null : state.activeTaskId,
+        deletedTasks: tasksToDelete
+      }))
+
+      return tasksToDelete.map(t => t.task)
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  restoreDeletedTasks: async () => {
+    const { deletedTasks } = get()
+    if (deletedTasks.length === 0) return
+
+    try {
+      // Recreate each deleted task with its original sortPosition
+      for (const { task } of deletedTasks) {
+        const restored = await window.api.tasks.create({
+          name: task.name,
+          description: task.description,
+          dateToWorkOn: task.dateToWorkOn,
+          deadline: task.deadline,
+          recurrenceRule: task.recurrenceRule
+        })
+        // Restore the original sort position
+        if (task.sortPosition !== undefined) {
+          await window.api.tasks.reorder(restored.id, task.sortPosition)
+        }
+      }
+
+      // Reload all tasks to get correct sort positions from database
+      await get().loadTasks()
+      set({ deletedTasks: [] })
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  clearDeletedTasks: () => {
+    set({ deletedTasks: [] })
   },
 
   reorderTask: async (id, newPosition) => {

@@ -21,7 +21,6 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
     contextDocumentsByContext,
     aiNotesByContext,
     updateContext,
-    updateTask,
     loadContextDocuments,
     addContextDocument,
     removeContextDocument,
@@ -215,7 +214,6 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
                       onComplete={() => onTaskComplete(task.id)}
                       onSelect={() => onTaskSelect(task)}
                       onClick={() => onTaskSelect(task)}
-                      onDateChange={(date) => updateTask(task.id, { dateToWorkOn: date })}
                       showDate
                     />
                   ))}

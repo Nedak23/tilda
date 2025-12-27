@@ -5,15 +5,17 @@ import type { Task, Context } from '../types'
 
 interface SortableTaskItemProps {
   task: Task
-  onSelect: () => void
+  onSelect?: () => void
   onClick: (e: React.MouseEvent) => void
   onComplete: () => void
-  onOpenChat?: () => void
-  onDateChange?: (date: string) => void
   isSelected?: boolean
   showCompletionDate?: boolean
   showDate?: boolean
   contexts?: Context[]
+  isEditing?: boolean
+  onStartEdit?: () => void
+  onCloseEdit?: () => void
+  onExpandChat?: () => void
 }
 
 export function SortableTaskItem({
@@ -21,12 +23,14 @@ export function SortableTaskItem({
   onSelect,
   onClick,
   onComplete,
-  onOpenChat,
-  onDateChange,
   isSelected,
   showCompletionDate,
   showDate,
-  contexts
+  contexts,
+  isEditing,
+  onStartEdit,
+  onCloseEdit,
+  onExpandChat
 }: SortableTaskItemProps) {
   const {
     attributes,
@@ -56,12 +60,14 @@ export function SortableTaskItem({
         onSelect={onSelect}
         onClick={onClick}
         onComplete={onComplete}
-        onOpenChat={onOpenChat}
-        onDateChange={onDateChange}
         isSelected={isSelected}
         showCompletionDate={showCompletionDate}
         showDate={showDate}
         contexts={contexts}
+        isEditing={isEditing}
+        onStartEdit={onStartEdit}
+        onCloseEdit={onCloseEdit}
+        onExpandChat={onExpandChat}
       />
     </div>
   )

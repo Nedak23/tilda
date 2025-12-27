@@ -221,6 +221,13 @@ function getMaxSortPosition(status: string): number {
   return result.max ?? -1
 }
 
+function getMinSortPosition(status: string): number {
+  const result = db.prepare(
+    'SELECT MIN(sort_position) as min FROM tasks WHERE status = ?'
+  ).get(status) as { min: number | null }
+  return result.min ?? 1
+}
+
 function getTodayDateString(): string {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -236,7 +243,7 @@ export function createTask(input: CreateTaskInput): Task {
   const id = uuidv4()
   const now = new Date().toISOString()
   const status = determineStatus(input.dateToWorkOn)
-  const sortPosition = getMaxSortPosition(status) + 1
+  const sortPosition = getMinSortPosition(status) - 1
 
   db.prepare(`
     INSERT INTO tasks (
