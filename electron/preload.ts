@@ -27,7 +27,12 @@ const api: ElectronAPI = {
   messages: {
     getByTask: (taskId: string) => ipcRenderer.invoke('messages:getByTask', taskId),
     create: (taskId: string, content: string, sender: MessageSender) =>
-      ipcRenderer.invoke('messages:create', taskId, content, sender)
+      ipcRenderer.invoke('messages:create', taskId, content, sender),
+    delete: (id: string) => ipcRenderer.invoke('messages:delete', id),
+    deleteFromId: (taskId: string, messageId: string) =>
+      ipcRenderer.invoke('messages:deleteFromId', taskId, messageId),
+    update: (id: string, content: string) =>
+      ipcRenderer.invoke('messages:update', id, content)
   },
   attachments: {
     getByTask: (taskId: string) => ipcRenderer.invoke('attachments:getByTask', taskId),
@@ -46,6 +51,19 @@ const api: ElectronAPI = {
 
       // Send the request
       return ipcRenderer.invoke('llm:sendMessage', taskId, userMessage, channel).finally(() => {
+        ipcRenderer.removeListener(channel, listener)
+      })
+    },
+    regenerateResponse: (taskId: string, onChunk: (chunk: string) => void) => {
+      // Create a unique channel for this request
+      const channel = `llm:chunk:${taskId}:${Date.now()}`
+
+      // Set up listener for chunks
+      const listener = (_event: unknown, chunk: string) => onChunk(chunk)
+      ipcRenderer.on(channel, listener)
+
+      // Send the request
+      return ipcRenderer.invoke('llm:regenerateResponse', taskId, channel).finally(() => {
         ipcRenderer.removeListener(channel, listener)
       })
     },
@@ -71,7 +89,25 @@ const api: ElectronAPI = {
       })
     },
     cancelRequest: () => ipcRenderer.send('tilda:cancel'),
-    clearHistory: () => ipcRenderer.invoke('tilda:clearHistory')
+    clearHistory: () => ipcRenderer.invoke('tilda:clearHistory'),
+    deleteMessage: (id: string) => ipcRenderer.invoke('tilda:deleteMessage', id),
+    deleteMessagesFromId: (messageId: string) =>
+      ipcRenderer.invoke('tilda:deleteMessagesFromId', messageId),
+    updateMessage: (id: string, content: string) =>
+      ipcRenderer.invoke('tilda:updateMessage', id, content),
+    regenerateResponse: (onChunk: (chunk: string) => void) => {
+      // Create a unique channel for this request
+      const channel = `tilda:chunk:${Date.now()}`
+
+      // Set up listener for chunks
+      const listener = (_event: unknown, chunk: string) => onChunk(chunk)
+      ipcRenderer.on(channel, listener)
+
+      // Send the request
+      return ipcRenderer.invoke('tilda:regenerateResponse', channel).finally(() => {
+        ipcRenderer.removeListener(channel, listener)
+      })
+    }
   },
   tildaAttachments: {
     getAll: () => ipcRenderer.invoke('tildaAttachments:getAll'),

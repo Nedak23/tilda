@@ -20,7 +20,9 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
     reopenTask,
     addAttachment,
     removeAttachment,
-    updateTask
+    updateTask,
+    retryMessage,
+    editAndResendMessage
   } = useTaskStore()
 
   const messages = messagesByTask[task.id] || []
@@ -32,10 +34,19 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
   const [editedName, setEditedName] = useState(task.name)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px'
+    }
+  }, [input])
 
   const handleSend = async () => {
     if (!input.trim() || isPending) return
@@ -96,10 +107,7 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
     <div className="flex flex-col h-full bg-surface">
       {/* Header */}
       <div className="flex-shrink-0 border-b border-border-light">
-        {/* Titlebar drag area */}
-        <div className="h-12 titlebar-drag" />
-
-        <div className="flex items-center justify-between px-4 pb-3">
+        <div className="px-4 py-3">
           <button
             onClick={onBack}
             className="flex items-center gap-1.5 text-text-secondary hover:text-text transition-colors titlebar-no-drag"
@@ -119,41 +127,56 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
             </svg>
             <span className="text-sm">Back</span>
           </button>
-
-          <button
-            onClick={handleTaskAction}
-            className={`
-              px-3 py-1.5 text-sm font-medium rounded-lg transition-colors titlebar-no-drag
-              ${task.status === 'archived'
-                ? 'bg-surface-tertiary text-text hover:bg-surface-elevated'
-                : 'bg-success/20 text-success hover:bg-success/30'
-              }
-            `}
-          >
-            {task.status === 'archived' ? 'Reopen' : 'Complete'}
-          </button>
         </div>
 
         {/* Task Info */}
         <div className="px-4 pb-4">
-          {isEditingName ? (
-            <input
-              type="text"
-              value={editedName}
-              onChange={e => setEditedName(e.target.value)}
-              onBlur={handleNameSave}
-              onKeyDown={handleNameKeyDown}
-              className="text-lg font-semibold text-text bg-transparent border-b border-accent-blue focus:outline-none w-full"
-              autoFocus
-            />
-          ) : (
-            <h2
-              onClick={() => setIsEditingName(true)}
-              className="text-lg font-semibold text-text cursor-pointer hover:text-accent-blue transition-colors"
-            >
-              {task.name}
-            </h2>
-          )}
+          <div className="flex items-center gap-3">
+            {/* Checkbox */}
+            {task.status !== 'archived' ? (
+              <button
+                onClick={handleTaskAction}
+                className="w-5 h-5 rounded border-2 border-text-tertiary flex items-center justify-center cursor-pointer transition-all duration-150 flex-shrink-0 hover:border-text-secondary titlebar-no-drag"
+                aria-label="Complete task"
+              />
+            ) : (
+              <button
+                onClick={handleTaskAction}
+                className="w-5 h-5 rounded bg-success border-2 border-success flex items-center justify-center cursor-pointer transition-all duration-150 flex-shrink-0 hover:opacity-80 titlebar-no-drag"
+                aria-label="Reopen task"
+              >
+                <svg
+                  className="w-3 h-3 text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={3}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </button>
+            )}
+
+            {/* Task name */}
+            {isEditingName ? (
+              <input
+                type="text"
+                value={editedName}
+                onChange={e => setEditedName(e.target.value)}
+                onBlur={handleNameSave}
+                onKeyDown={handleNameKeyDown}
+                className="text-lg font-semibold text-text bg-transparent border-b border-accent-blue focus:outline-none flex-1"
+                autoFocus
+              />
+            ) : (
+              <h2
+                onClick={() => setIsEditingName(true)}
+                className="text-lg font-semibold text-text cursor-pointer hover:text-accent-blue transition-colors"
+              >
+                {task.name}
+              </h2>
+            )}
+          </div>
           {task.deadline && (
             <p className="text-sm text-text-secondary mt-1">
               Due {format(parseISO(task.deadline), 'MMMM d, yyyy')}
@@ -210,6 +233,8 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
                   key={message.id}
                   message={message}
                   isStreaming={isPending && isLastAgentMessage}
+                  onRetry={(id) => retryMessage(task.id, id)}
+                  onEdit={(id, content) => editAndResendMessage(task.id, id, content)}
                 />
               )
             })}
@@ -228,73 +253,67 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 border-t border-border-light p-4">
-        <div className="flex items-end gap-3">
-          {/* Attach button */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="p-2 text-text-tertiary hover:text-text-secondary rounded-lg transition-colors"
-            title="Attach file"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-              />
-            </svg>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={FILE_INPUT_ACCEPT}
-            multiple
-            onChange={handleFileSelect}
-            className="hidden"
+      <div className="flex-shrink-0 border-t border-border-light p-3">
+        <div className="bg-[#1a1a1a] rounded-xl p-3">
+          {/* Textarea */}
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Reply..."
+            rows={1}
+            className="w-full bg-transparent text-text text-sm resize-none focus:outline-none focus:ring-0 border-none min-h-[24px] max-h-[120px]"
+            disabled={isPending}
           />
 
-          {/* Message input */}
-          <div className="flex-1">
-            <textarea
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type a message..."
-              rows={1}
-              className="w-full px-4 py-2.5 bg-[#1a1a1a] rounded-2xl text-sm text-text placeholder-text-tertiary resize-none focus:outline-none max-h-32"
-              style={{
-                minHeight: '42px',
-                height: Math.min(input.split('\n').length * 24 + 18, 128) + 'px'
-              }}
-            />
-          </div>
-
-          {/* Send button */}
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || isPending}
-            className="p-2 bg-surface-button text-white rounded-lg hover:bg-surface-buttonHover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+          {/* Bottom row */}
+          <div className="flex items-center justify-between mt-2">
+            {/* Left side - action buttons */}
+            <div className="flex items-center gap-1">
+              {/* Add file button */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="p-1 text-text-tertiary hover:text-text-secondary rounded transition-colors"
+                title="Attach file"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={FILE_INPUT_ACCEPT}
+                multiple
+                onChange={handleFileSelect}
+                className="hidden"
               />
-            </svg>
-          </button>
+            </div>
+
+            {/* Right side - send button */}
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || isPending}
+              className="p-1.5 rounded-lg bg-surface-button text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-surface-buttonHover transition-colors"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>

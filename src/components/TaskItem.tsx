@@ -105,7 +105,11 @@ export function TaskItem({
           aria-label="Complete task"
         />
       ) : (
-        <div className="checkbox checked flex-shrink-0">
+        <button
+          onClick={handleCheckboxClick}
+          className="checkbox checked flex-shrink-0"
+          aria-label="Uncheck task"
+        >
           <svg
             className="w-2.5 h-2.5 text-white"
             fill="none"
@@ -115,7 +119,7 @@ export function TaskItem({
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
-        </div>
+        </button>
       )}
 
       {/* Task name */}

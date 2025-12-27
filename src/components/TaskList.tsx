@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -6,8 +7,33 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  DragEndEvent
+  DragEndEvent,
+  PointerSensorOptions
 } from '@dnd-kit/core'
+
+// Custom PointerSensor that ignores events with modifier keys (for multi-select)
+class SelectionAwarePointerSensor extends PointerSensor {
+  static activators = [
+    {
+      eventName: 'onPointerDown' as const,
+      handler: (
+        { nativeEvent: event }: ReactPointerEvent,
+        { onActivation }: PointerSensorOptions
+      ) => {
+        // Don't start drag when modifier keys are pressed (for multi-select)
+        if (event.shiftKey || event.metaKey || event.ctrlKey) {
+          return false
+        }
+        // Only activate on primary pointer and left button
+        if (!event.isPrimary || event.button !== 0) {
+          return false
+        }
+        onActivation?.({ event })
+        return true
+      }
+    }
+  ]
+}
 import {
   SortableContext,
   sortableKeyboardCoordinates,
@@ -90,7 +116,7 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
   )
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(SelectionAwarePointerSensor, {
       activationConstraint: {
         distance: 8
       }

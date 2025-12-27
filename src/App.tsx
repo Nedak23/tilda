@@ -84,6 +84,13 @@ function App() {
 
   const activeTask = tasks.find(t => t.id === activeTaskId)
 
+  // Collapse Tilda sidebar when entering full screen task chat mode
+  useEffect(() => {
+    if (activeTaskId) {
+      setTildaCollapsed(true)
+    }
+  }, [activeTaskId, setTildaCollapsed])
+
   // Get visible tasks for range selection
   const getVisibleTasks = useCallback(() => {
     if (currentView === 'today') {

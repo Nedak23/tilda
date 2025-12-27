@@ -86,6 +86,9 @@ export interface TasksAPI {
 export interface MessagesAPI {
   getByTask: (taskId: string) => Promise<Message[]>
   create: (taskId: string, content: string, sender: MessageSender) => Promise<Message>
+  delete: (id: string) => Promise<void>
+  deleteFromId: (taskId: string, messageId: string) => Promise<void>
+  update: (id: string, content: string) => Promise<void>
 }
 
 export interface AttachmentsAPI {
@@ -98,6 +101,10 @@ export interface LLMAPI {
   sendMessage: (
     taskId: string,
     userMessage: string,
+    onChunk: (chunk: string) => void
+  ) => Promise<string>
+  regenerateResponse: (
+    taskId: string,
     onChunk: (chunk: string) => void
   ) => Promise<string>
   cancelRequest: (taskId: string) => void
@@ -136,8 +143,14 @@ export interface TildaAPI {
     userMessage: string,
     onChunk: (chunk: string) => void
   ) => Promise<string>
+  regenerateResponse: (
+    onChunk: (chunk: string) => void
+  ) => Promise<string>
   cancelRequest: () => void
   clearHistory: () => Promise<void>
+  deleteMessage: (id: string) => Promise<void>
+  deleteMessagesFromId: (messageId: string) => Promise<void>
+  updateMessage: (id: string, content: string) => Promise<void>
 }
 
 // Context types
