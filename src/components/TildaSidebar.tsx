@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { format } from 'date-fns'
 import { useTaskStore } from '../stores/taskStore'
 import { isFileSupported, FILE_INPUT_ACCEPT } from '../utils/fileUtils'
+import { MarkdownContent } from './MarkdownContent'
 import type { TildaMessage } from '../types'
 
 const MAX_CHARS_BEFORE_TRUNCATE = 500
@@ -140,8 +141,8 @@ function TildaChatMessage({ message, isStreaming = false, onRetry, onEdit }: Til
               </div>
             ) : (
               <>
-                <div className="text-sm text-text whitespace-pre-wrap break-words">
-                  {displayContent}
+                <div className="text-sm text-text break-words">
+                  <MarkdownContent content={displayContent} />
                 </div>
                 {message.content.length > MAX_CHARS_BEFORE_TRUNCATE && (
                   <button
@@ -163,8 +164,8 @@ function TildaChatMessage({ message, isStreaming = false, onRetry, onEdit }: Til
   return (
     <div className="flex justify-start animate-fade-in">
       <div className="max-w-[85%]">
-        <div className="text-sm text-text whitespace-pre-wrap break-words">
-          {message.content}
+        <div className="text-sm text-text break-words">
+          <MarkdownContent content={message.content} />
           {isStreaming && (
             <span className="inline-block w-1.5 h-4 bg-current ml-0.5 animate-pulse" />
           )}

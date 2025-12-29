@@ -448,7 +448,6 @@ function App() {
       {/* AI Note Saved Notification */}
       {notification && (
         <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 px-4 py-3 bg-surface-secondary border border-border-light rounded-lg shadow-xl animate-slide-up">
-          <span className="text-lg">🤖</span>
           <span className="text-sm text-text">{notification.message}</span>
           <button
             onClick={() => setNotification(null)}

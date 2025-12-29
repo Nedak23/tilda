@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Message } from '../types'
+import { MarkdownContent } from './MarkdownContent'
 
 const MAX_CHARS_BEFORE_TRUNCATE = 500
 
@@ -175,8 +176,8 @@ export function ChatMessage({
               </div>
             ) : (
               <>
-                <div className="text-sm text-text whitespace-pre-wrap break-words">
-                  {displayContent}
+                <div className="text-sm text-text break-words">
+                  <MarkdownContent content={displayContent} />
                 </div>
                 {message.content.length > MAX_CHARS_BEFORE_TRUNCATE && (
                   <button
@@ -214,8 +215,8 @@ export function ChatMessage({
   return (
     <div className="flex justify-start animate-fade-in">
       <div className="max-w-[80%]">
-        <div className="text-sm text-text whitespace-pre-wrap break-words">
-          {message.content}
+        <div className="text-sm text-text break-words">
+          <MarkdownContent content={message.content} />
           {isStreaming && (
             <span className="inline-block w-1.5 h-4 bg-current ml-0.5 animate-pulse" />
           )}
