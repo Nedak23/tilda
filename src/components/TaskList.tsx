@@ -3,7 +3,6 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -36,7 +35,6 @@ class SelectionAwarePointerSensor extends PointerSensor {
 }
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { format, parseISO } from 'date-fns'
@@ -120,9 +118,6 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
       activationConstraint: {
         distance: 8
       }
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates
     })
   )
 

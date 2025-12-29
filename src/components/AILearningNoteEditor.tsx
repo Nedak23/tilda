@@ -59,8 +59,7 @@ export function AILearningNoteEditor({ note, isOpen, onClose, onSave }: AILearni
       <div className="relative bg-surface-secondary border border-border-light rounded-lg shadow-xl w-full max-w-lg mx-4">
         <form onSubmit={handleSubmit}>
           {/* Header */}
-          <div className="px-4 py-3 border-b border-border-light flex items-center gap-2">
-            <span className="text-lg">🤖</span>
+          <div className="px-4 py-3 border-b border-border-light">
             <h2 className="text-lg font-semibold text-text">Edit AI Learning Note</h2>
           </div>
 
