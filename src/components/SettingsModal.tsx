@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { logger } from '../utils/logger'
 import type { Settings, ModelType } from '../types'
 
 interface SettingsModalProps {
@@ -29,7 +30,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         setApiKey(settings.apiKey)
         setModel(settings.model)
       } catch (error) {
-        console.error('Failed to load settings:', error)
+        logger.error('Failed to load settings:', error)
       } finally {
         setIsLoading(false)
       }
@@ -74,7 +75,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       await window.api.settings.save(settings)
       onClose()
     } catch (err) {
-      console.error('Failed to save settings:', err)
+      logger.error('Failed to save settings:', err)
       setError(err instanceof Error ? err.message : 'Failed to save settings')
     } finally {
       setIsSaving(false)

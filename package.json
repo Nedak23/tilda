@@ -2,10 +2,13 @@
   "name": "tilda",
   "version": "0.1.0",
   "description": "A to-do list app where each task is an AI conversation",
+  "author": "Nedak23",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
+    "build:mac": "tsc && vite build && electron-builder --mac",
+    "release": "tsc && vite build && electron-builder --mac --publish always",
     "preview": "vite preview",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "rebuild": "electron-rebuild -f -w better-sqlite3"
@@ -18,6 +21,7 @@
     "better-sqlite3": "^11.6.0",
     "date-fns": "^4.1.0",
     "electron-store": "^11.0.2",
+    "electron-updater": "^6.1.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
@@ -54,7 +58,18 @@
     ],
     "mac": {
       "category": "public.app-category.productivity",
-      "target": "dmg"
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "icon": "build/icon.icns"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Nedak23",
+      "repo": "tilda"
     }
   }
 }

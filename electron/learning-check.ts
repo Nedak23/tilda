@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { logger } from './logger'
 import {
   getDocumentsByContext,
   getAILearningNotesByContext,
@@ -68,7 +69,7 @@ export async function performLearningCheck(
 ): Promise<LearningCheckResult> {
   const apiKey = getApiKey()
   if (!apiKey) {
-    console.log('Learning check skipped: No API key configured')
+    logger.log('Learning check skipped: No API key configured')
     return { noteSaved: false }
   }
 
@@ -84,7 +85,7 @@ export async function performLearningCheck(
 
   // If no contexts at all (shouldn't happen with General), skip
   if (availableContexts.length === 0) {
-    console.log('Learning check skipped: No contexts available')
+    logger.log('Learning check skipped: No contexts available')
     return { noteSaved: false }
   }
 
@@ -141,7 +142,7 @@ Consider the existing note titles to avoid saving duplicate information.
       }
       parsed = JSON.parse(cleanedResponse)
     } catch (parseError) {
-      console.error('Failed to parse learning check response:', responseText)
+      logger.error('Failed to parse learning check response:', responseText, parseError)
       return { noteSaved: false }
     }
 
@@ -160,14 +161,14 @@ Consider the existing note titles to avoid saving duplicate information.
         sourceTaskName: task.name
       })
 
-      console.log(`Learning note saved: "${note.title}" to context ${validContextId}`)
+      logger.log(`Learning note saved: "${note.title}" to context ${validContextId}`)
       return { noteSaved: true, note }
     }
 
-    console.log('Learning check completed: Nothing to save')
+    logger.log('Learning check completed: Nothing to save')
     return { noteSaved: false }
   } catch (error) {
-    console.error('Learning check failed:', error)
+    logger.error('Learning check failed:', error)
     return { noteSaved: false }
   }
 }

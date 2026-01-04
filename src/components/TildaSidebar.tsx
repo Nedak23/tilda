@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { format } from 'date-fns'
 import { useTaskStore } from '../stores/taskStore'
 import { isFileSupported, FILE_INPUT_ACCEPT } from '../utils/fileUtils'
+import { logger } from '../utils/logger'
 import { MarkdownContent } from './MarkdownContent'
 import type { TildaMessage } from '../types'
 
@@ -267,7 +268,7 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
 
     for (const file of files) {
       if (!isFileSupported(file)) {
-        console.warn(`Skipping unsupported file: ${file.name}`)
+        logger.warn(`Skipping unsupported file: ${file.name}`)
         continue
       }
       await addTildaAttachment(file)

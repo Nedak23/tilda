@@ -10,6 +10,7 @@ import { ContextDetailView } from './components/ContextDetailView'
 import { PanelLayout } from './components/PanelLayout'
 import { ControlBar } from './components/ControlBar'
 import { useLayoutState } from './hooks/useLayoutState'
+import { logger } from './utils/logger'
 import type { AILearningNote } from './types'
 
 function App() {
@@ -53,7 +54,7 @@ function App() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const lastSelectedTaskId = useRef<string | null>(null)
   const datePickerRef = useRef<HTMLDivElement>(null)
-  const deleteTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     loadTasks()
@@ -237,7 +238,7 @@ function App() {
         )
       )
     } catch (error) {
-      console.error('Failed to update some tasks:', error)
+      logger.error('Failed to update some tasks:', error)
     }
     setShowDatePicker(false)
     setSelectedTaskIds(new Set())

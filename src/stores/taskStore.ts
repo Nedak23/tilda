@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Task, Message, Attachment, ViewType, CreateTaskInput, UpdateTaskInput, TildaMessage, TildaAttachment, Context, ContextDocument, CreateContextInput, UpdateContextInput, AILearningNote, UpdateAILearningNoteInput } from '../types'
 import { readFileContent, getFileMimeType } from '../utils/fileUtils'
+import { logger } from '../utils/logger'
 
 interface TaskStore {
   // State
@@ -740,7 +741,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       await window.api.tilda.clearHistory()
       set({ tildaMessages: [], tildaAttachments: [] })
     } catch (error) {
-      console.error('Failed to clear Tilda history:', error)
+      logger.error('Failed to clear Tilda history:', error)
       set({ error: (error as Error).message })
     }
   },
