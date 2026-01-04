@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { logger } from './logger'
 import {
   getTildaMessages,
   createTildaMessage,
@@ -369,10 +370,10 @@ function executeToolCall(toolName: string, toolInput: ToolInput): string {
           learningCheckPromise
             .then(result => {
               if (result.noteSaved && result.note) {
-                console.log(`Learning note saved from Tilda: "${result.note.title}"`)
+                logger.log(`Learning note saved from Tilda: "${result.note.title}"`)
               }
             })
-            .catch(err => console.error('Learning check error from Tilda:', err))
+            .catch(err => logger.error('Learning check error from Tilda:', err))
 
           return JSON.stringify({
             success: true,

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { useTaskStore } from '../stores/taskStore'
+import { logger } from '../utils/logger'
 import type { RecurrenceFrequency, RecurrenceRule } from '../types'
 
 interface CreateTaskModalProps {
@@ -70,7 +71,7 @@ export function CreateTaskModal({ isOpen, onClose }: CreateTaskModalProps) {
 
       handleClose()
     } catch (error) {
-      console.error('Failed to create task:', error)
+      logger.error('Failed to create task:', error)
     } finally {
       setIsSubmitting(false)
     }

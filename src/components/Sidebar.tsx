@@ -16,6 +16,7 @@ import {
 import { useTaskStore } from '../stores/taskStore'
 import { SortableContextItem } from './SortableContextItem'
 import { CreateContextModal } from './CreateContextModal'
+import { logger } from '../utils/logger'
 import type { ViewType } from '../types'
 
 const navItems: { id: ViewType; label: string }[] = [
@@ -99,7 +100,7 @@ export function Sidebar() {
     try {
       await createContext({ name, description })
     } catch (error) {
-      console.error('Failed to create context:', error)
+      logger.error('Failed to create context:', error)
     }
   }
 
@@ -108,7 +109,7 @@ export function Sidebar() {
       try {
         await deleteContext(contextId)
       } catch (error) {
-        console.error('Failed to delete context:', error)
+        logger.error('Failed to delete context:', error)
       }
     }
   }
@@ -124,7 +125,7 @@ export function Sidebar() {
         try {
           await reorderContext(active.id as string, newIndex)
         } catch (error) {
-          console.error('Failed to reorder context:', error)
+          logger.error('Failed to reorder context:', error)
         }
       }
     }

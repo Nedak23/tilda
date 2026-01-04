@@ -4,6 +4,7 @@ import { ContextDocumentList } from './ContextDocumentList'
 import { AILearningNotesList } from './AILearningNotesList'
 import { AILearningNoteEditor } from './AILearningNoteEditor'
 import { TaskItem } from './TaskItem'
+import { logger } from '../utils/logger'
 import { GENERAL_CONTEXT_ID } from '../types'
 import type { Task, AILearningNote } from '../types'
 
@@ -83,7 +84,7 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
       await updateContext(contextId, { description: descriptionDraft || undefined })
       setIsEditingDescription(false)
     } catch (error) {
-      console.error('Failed to update description:', error)
+      logger.error('Failed to update description:', error)
     }
   }
 
@@ -91,7 +92,7 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
     try {
       await addContextDocument(contextId, file)
     } catch (error) {
-      console.error('Failed to upload document:', error)
+      logger.error('Failed to upload document:', error)
     }
   }
 
@@ -99,7 +100,7 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
     try {
       await removeContextDocument(id, contextId)
     } catch (error) {
-      console.error('Failed to delete document:', error)
+      logger.error('Failed to delete document:', error)
     }
   }
 
@@ -111,7 +112,7 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
     try {
       await updateAINote(id, contextId, input)
     } catch (error) {
-      console.error('Failed to update AI note:', error)
+      logger.error('Failed to update AI note:', error)
     }
   }
 
@@ -119,7 +120,7 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
     try {
       await deleteAINote(id, contextId)
     } catch (error) {
-      console.error('Failed to delete AI note:', error)
+      logger.error('Failed to delete AI note:', error)
     }
   }
 

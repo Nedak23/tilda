@@ -237,6 +237,29 @@ export interface AINotesAPI {
   onNoteSaved: (callback: (note: AILearningNote) => void) => () => void
 }
 
+export interface UpdateInfo {
+  version: string
+  releaseNotes?: string
+}
+
+export interface DownloadProgress {
+  percent: number
+  bytesPerSecond: number
+}
+
+export interface UpdateCheckResult {
+  updateInfo: UpdateInfo
+}
+
+export interface UpdaterAPI {
+  checkForUpdates: () => Promise<UpdateCheckResult | null>
+  downloadUpdate: () => Promise<void>
+  installUpdate: () => void
+  onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void
+  onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void
+  onUpdateReady: (callback: () => void) => () => void
+}
+
 export interface ElectronAPI {
   tasks: TasksAPI
   messages: MessagesAPI
@@ -248,6 +271,7 @@ export interface ElectronAPI {
   contexts: ContextsAPI
   contextDocuments: ContextDocumentsAPI
   aiNotes: AINotesAPI
+  updater: UpdaterAPI
 }
 
 declare global {

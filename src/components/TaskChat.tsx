@@ -3,6 +3,7 @@ import { format, parseISO } from 'date-fns'
 import { useTaskStore } from '../stores/taskStore'
 import { ChatMessage } from './ChatMessage'
 import { isFileSupported, FILE_INPUT_ACCEPT } from '../utils/fileUtils'
+import { logger } from '../utils/logger'
 import type { Task } from '../types'
 
 interface TaskChatProps {
@@ -78,7 +79,7 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
 
     for (const file of files) {
       if (!isFileSupported(file)) {
-        console.warn(`Skipping unsupported file: ${file.name}`)
+        logger.warn(`Skipping unsupported file: ${file.name}`)
         continue
       }
       await addAttachment(task.id, file)

@@ -1,6 +1,8 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { logger, isDev } from './logger'
+import { initAutoUpdater } from './auto-updater'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -115,7 +117,7 @@ ipcMain.handle('tasks:complete', async (_event, id: string) => {
         mainWindow.webContents.send('ai-note:saved', result.note)
       }
     })
-    .catch(err => console.error('Learning check error:', err))
+    .catch(err => logger.error('Learning check error:', err))
 
   return task
 })
@@ -256,7 +258,7 @@ ipcMain.handle('tilda:clearHistory', async () => {
     clearTildaAttachments()
     return { success: true }
   } catch (error) {
-    console.error('Failed to clear Tilda history:', error)
+    logger.error('Failed to clear Tilda history:', error)
     throw error
   }
 })
@@ -377,6 +379,11 @@ app.whenReady().then(() => {
   initDatabase()
   migrateTasksToToday()
   createWindow()
+
+  // Initialize auto-updater in production mode only
+  if (!isDev && mainWindow) {
+    initAutoUpdater(mainWindow)
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

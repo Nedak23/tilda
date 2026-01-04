@@ -4,6 +4,7 @@ import { useTaskStore } from '../stores/taskStore'
 import { ChatMessage } from './ChatMessage'
 import { CalendarPicker } from './CalendarPicker'
 import { isFileSupported, FILE_INPUT_ACCEPT } from '../utils/fileUtils'
+import { logger } from '../utils/logger'
 import { GENERAL_CONTEXT_ID } from '../types'
 import type { Task } from '../types'
 
@@ -167,7 +168,7 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
       setCreatedTask(newTask)
       return newTask
     } catch (error) {
-      console.error('Failed to create task:', error)
+      logger.error('Failed to create task:', error)
       return null
     }
   }
@@ -293,7 +294,7 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
 
     for (const file of files) {
       if (!isFileSupported(file)) {
-        console.warn(`Skipping unsupported file: ${file.name}`)
+        logger.warn(`Skipping unsupported file: ${file.name}`)
         continue
       }
       await addAttachment(taskToUse.id, file)

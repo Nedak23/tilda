@@ -145,6 +145,26 @@ const api: ElectronAPI = {
       // Return unsubscribe function
       return () => ipcRenderer.removeListener('ai-note:saved', listener)
     }
+  },
+  updater: {
+    checkForUpdates: () => ipcRenderer.invoke('update:check'),
+    downloadUpdate: () => ipcRenderer.invoke('update:download'),
+    installUpdate: () => ipcRenderer.invoke('update:install'),
+    onUpdateAvailable: (callback: (info: { version: string; releaseNotes?: string }) => void) => {
+      const listener = (_event: unknown, info: { version: string; releaseNotes?: string }) => callback(info)
+      ipcRenderer.on('update:available', listener)
+      return () => ipcRenderer.removeListener('update:available', listener)
+    },
+    onDownloadProgress: (callback: (progress: { percent: number; bytesPerSecond: number }) => void) => {
+      const listener = (_event: unknown, progress: { percent: number; bytesPerSecond: number }) => callback(progress)
+      ipcRenderer.on('update:progress', listener)
+      return () => ipcRenderer.removeListener('update:progress', listener)
+    },
+    onUpdateReady: (callback: () => void) => {
+      const listener = () => callback()
+      ipcRenderer.on('update:ready', listener)
+      return () => ipcRenderer.removeListener('update:ready', listener)
+    }
   }
 }
 
