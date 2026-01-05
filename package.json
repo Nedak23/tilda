@@ -56,6 +56,10 @@
       "dist/**/*",
       "dist-electron/**/*"
     ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
