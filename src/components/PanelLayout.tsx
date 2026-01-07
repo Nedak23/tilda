@@ -38,6 +38,10 @@ export function PanelLayout({
   const prevRightCollapsed = useRef(isRightCollapsed)
   const initializedRef = useRef(false)
 
+  // Track programmatic collapse/expand to prevent resize callbacks from overriding state
+  const isProgrammaticLeftRef = useRef(false)
+  const isProgrammaticRightRef = useRef(false)
+
   // Restore saved sizes on initial mount.
   // We capture the current values in refs to avoid stale closure issues,
   // since this effect only runs once when panel handles become available.
@@ -70,6 +74,8 @@ export function PanelLayout({
     if (prevLeftCollapsed.current === isLeftCollapsed) return
 
     prevLeftCollapsed.current = isLeftCollapsed
+    isProgrammaticLeftRef.current = true
+
     if (isLeftCollapsed) {
       leftPanelHandle.collapse()
     } else {
@@ -79,6 +85,13 @@ export function PanelLayout({
         leftPanelHandle.resize(`${leftSize}%`)
       })
     }
+
+    // Reset the programmatic flag after the panel library settles.
+    // 100ms allows for the panel's internal state and any CSS transitions to complete.
+    // This prevents resize callbacks during the animation from incorrectly updating state.
+    setTimeout(() => {
+      isProgrammaticLeftRef.current = false
+    }, 100)
   }, [isLeftCollapsed, leftPanelHandle, leftSize])
 
   useEffect(() => {
@@ -86,6 +99,8 @@ export function PanelLayout({
     if (prevRightCollapsed.current === isRightCollapsed) return
 
     prevRightCollapsed.current = isRightCollapsed
+    isProgrammaticRightRef.current = true
+
     if (isRightCollapsed) {
       rightPanelHandle.collapse()
     } else {
@@ -95,13 +110,26 @@ export function PanelLayout({
         rightPanelHandle.resize(`${rightSize}%`)
       })
     }
+
+    // Reset the programmatic flag after the panel library settles.
+    // 100ms allows for the panel's internal state and any CSS transitions to complete.
+    // This prevents resize callbacks during the animation from incorrectly updating state.
+    setTimeout(() => {
+      isProgrammaticRightRef.current = false
+    }, 100)
   }, [isRightCollapsed, rightPanelHandle, rightSize])
 
   // Track collapse state and size from user dragging panels
+  // Skip updates during programmatic changes or before initialization to prevent spurious reopens
   const handleLeftResize = useCallback((size: PanelSize) => {
+    if (!initializedRef.current || isProgrammaticLeftRef.current) return
+
     const collapsed = size.inPixels === 0
-    if (collapsed !== isLeftCollapsed) {
-      onLeftCollapseChange?.(collapsed)
+    // Only allow collapsing via resize (user dragging to 0), not expanding
+    // This prevents spurious re-renders from accidentally expanding a collapsed panel
+    // Expanding must be done via the toggle button
+    if (collapsed && !isLeftCollapsed) {
+      onLeftCollapseChange?.(true)
     }
     if (!collapsed && size.asPercentage > 0) {
       onLeftSizeChange?.(size.asPercentage)
@@ -109,9 +137,14 @@ export function PanelLayout({
   }, [isLeftCollapsed, onLeftCollapseChange, onLeftSizeChange])
 
   const handleRightResize = useCallback((size: PanelSize) => {
+    if (!initializedRef.current || isProgrammaticRightRef.current) return
+
     const collapsed = size.inPixels === 0
-    if (collapsed !== isRightCollapsed) {
-      onRightCollapseChange?.(collapsed)
+    // Only allow collapsing via resize (user dragging to 0), not expanding
+    // This prevents spurious re-renders from accidentally expanding a collapsed panel
+    // Expanding must be done via the toggle button
+    if (collapsed && !isRightCollapsed) {
+      onRightCollapseChange?.(true)
     }
     if (!collapsed && size.asPercentage > 0) {
       onRightSizeChange?.(size.asPercentage)

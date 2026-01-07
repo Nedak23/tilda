@@ -111,6 +111,7 @@ const api: ElectronAPI = {
   },
   tildaAttachments: {
     getAll: () => ipcRenderer.invoke('tildaAttachments:getAll'),
+    getPending: () => ipcRenderer.invoke('tildaAttachments:getPending'),
     create: (filename: string, content: string, mimeType: string) =>
       ipcRenderer.invoke('tildaAttachments:create', filename, content, mimeType),
     delete: (id: string) => ipcRenderer.invoke('tildaAttachments:delete', id),
