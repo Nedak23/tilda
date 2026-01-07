@@ -6,17 +6,17 @@ import type { Context } from '../types'
 interface SortableContextItemProps {
   context: Context
   isActive: boolean
-  taskCount: number
   onSelect: () => void
   onDelete: () => void
+  onRename: (newName: string) => void
 }
 
 export function SortableContextItem({
   context,
   isActive,
-  taskCount,
   onSelect,
-  onDelete
+  onDelete,
+  onRename
 }: SortableContextItemProps) {
   const {
     attributes,
@@ -44,9 +44,9 @@ export function SortableContextItem({
       <ContextSidebarItem
         context={context}
         isActive={isActive}
-        taskCount={taskCount}
         onSelect={onSelect}
         onDelete={onDelete}
+        onRename={onRename}
       />
     </div>
   )

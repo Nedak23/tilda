@@ -4,14 +4,62 @@ import { GENERAL_CONTEXT_ID, type Context } from '../types'
 interface ContextSidebarItemProps {
   context: Context
   isActive: boolean
-  taskCount: number
   onSelect: () => void
   onDelete: () => void
+  onRename: (newName: string) => void
 }
 
-export function ContextSidebarItem({ context, isActive, taskCount, onSelect, onDelete }: ContextSidebarItemProps) {
+export function ContextSidebarItem({ context, isActive, onSelect, onDelete, onRename }: ContextSidebarItemProps) {
   const [showMenu, setShowMenu] = useState(false)
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [renameDraft, setRenameDraft] = useState('')
   const isGeneralContext = context.id === GENERAL_CONTEXT_ID
+
+  const handleStartRename = () => {
+    setRenameDraft(context.name)
+    setIsRenaming(true)
+    setShowMenu(false)
+  }
+
+  const handleSubmitRename = () => {
+    if (renameDraft.trim() && renameDraft.trim() !== context.name) {
+      onRename(renameDraft.trim())
+    }
+    setIsRenaming(false)
+  }
+
+  const handleCancelRename = () => {
+    setIsRenaming(false)
+    setRenameDraft('')
+  }
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleSubmitRename()
+    } else if (e.key === 'Escape') {
+      handleCancelRename()
+    }
+  }
+
+  if (isRenaming) {
+    return (
+      <div className="relative px-2.5 py-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-text-secondary">#</span>
+          <input
+            type="text"
+            value={renameDraft}
+            onChange={(e) => setRenameDraft(e.target.value)}
+            onKeyDown={handleRenameKeyDown}
+            onBlur={handleSubmitRename}
+            autoFocus
+            className="flex-1 text-sm font-medium bg-surface-tertiary border border-border-light rounded px-2 py-0.5 text-text focus:outline-none focus:ring-1 focus:ring-border-selected focus:border-border-selected"
+          />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="relative group">
@@ -28,11 +76,6 @@ export function ContextSidebarItem({ context, isActive, taskCount, onSelect, onD
       >
         <span className="text-sm text-text-secondary">#</span>
         <span className="flex-1 text-sm font-medium truncate">{context.name}</span>
-        {taskCount > 0 && (
-          <span className={`text-xs text-text-secondary transition-opacity ${isGeneralContext ? '' : 'group-hover:opacity-0'}`}>
-            {taskCount}
-          </span>
-        )}
       </button>
 
       {/* Menu button - shows on hover, but not for General context */}
@@ -63,6 +106,15 @@ export function ContextSidebarItem({ context, isActive, taskCount, onSelect, onD
             onClick={() => setShowMenu(false)}
           />
           <div className="absolute right-0 top-full mt-1 z-20 bg-surface-secondary border border-border-light rounded-md shadow-lg py-1 min-w-[120px]">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleStartRename()
+              }}
+              className="w-full px-3 py-1.5 text-left text-sm text-text hover:bg-surface-tertiary"
+            >
+              Rename
+            </button>
             <button
               onClick={(e) => {
                 e.stopPropagation()
