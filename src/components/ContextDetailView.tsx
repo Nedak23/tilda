@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useImperativeHandle, forwardRef } from 'react'
 import { useTaskStore } from '../stores/taskStore'
 import { ContextDocumentList } from './ContextDocumentList'
 import { AILearningNotesList } from './AILearningNotesList'
 import { AILearningNoteEditor } from './AILearningNoteEditor'
 import { TaskItem } from './TaskItem'
+import { InlineTaskEdit } from './InlineTaskEdit'
 import { logger } from '../utils/logger'
 import { GENERAL_CONTEXT_ID } from '../types'
 import type { Task, AILearningNote } from '../types'
@@ -12,9 +13,16 @@ interface ContextDetailViewProps {
   contextId: string
   onTaskSelect: (task: Task) => void
   onTaskComplete: (id: string) => void
+  selectedTaskIds?: Set<string>
+  onTaskClick?: (taskId: string, e: React.MouseEvent) => void
 }
 
-export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: ContextDetailViewProps) {
+export interface ContextDetailViewRef {
+  startCreatingTask: () => void
+}
+
+export const ContextDetailView = forwardRef<ContextDetailViewRef, ContextDetailViewProps>(
+  function ContextDetailView({ contextId, onTaskSelect, onTaskComplete, selectedTaskIds, onTaskClick }, ref) {
   const {
     contexts,
     tasks,
@@ -34,6 +42,14 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
   const [isEditingDescription, setIsEditingDescription] = useState(false)
   const [descriptionDraft, setDescriptionDraft] = useState('')
   const [editingNote, setEditingNote] = useState<AILearningNote | null>(null)
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+  const [isCreatingTask, setIsCreatingTask] = useState(false)
+
+  // Expose startCreatingTask to parent via ref
+  useImperativeHandle(ref, () => ({
+    startCreatingTask: () => setIsCreatingTask(true)
+  }), [])
 
   const context = contexts.find(c => c.id === contextId)
   const documents = contextDocumentsByContext[contextId] || []
@@ -88,6 +104,31 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
     }
   }
 
+  const handleStartEditName = () => {
+    setNameDraft(context?.name || '')
+    setIsEditingName(true)
+  }
+
+  const handleSaveName = async () => {
+    if (nameDraft.trim() && nameDraft.trim() !== context?.name) {
+      try {
+        await updateContext(contextId, { name: nameDraft.trim() })
+      } catch (error) {
+        logger.error('Failed to update name:', error)
+      }
+    }
+    setIsEditingName(false)
+  }
+
+  const handleNameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleSaveName()
+    } else if (e.key === 'Escape') {
+      setIsEditingName(false)
+    }
+  }
+
   const handleUploadDocument = async (file: File) => {
     try {
       await addContextDocument(contextId, file)
@@ -128,9 +169,34 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
     <div className="flex-1 flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="px-6 py-4 border-b border-border-light">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 group">
           <span className="text-2xl text-text-secondary">#</span>
-          <h1 className="text-xl font-semibold text-text">{context.name}</h1>
+          {isEditingName ? (
+            <input
+              type="text"
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onKeyDown={handleNameKeyDown}
+              onBlur={handleSaveName}
+              autoFocus
+              className="text-xl font-semibold text-text bg-surface-tertiary border border-border-light rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-border-selected focus:border-border-selected"
+            />
+          ) : (
+            <>
+              <h1 className="text-xl font-semibold text-text">{context.name}</h1>
+              {contextId !== GENERAL_CONTEXT_ID && (
+                <button
+                  onClick={handleStartEditName}
+                  className="p-1 text-text-secondary hover:text-text opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Rename context"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                  </svg>
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -156,7 +222,7 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
                   value={descriptionDraft}
                   onChange={(e) => setDescriptionDraft(e.target.value)}
                   placeholder="What is this context for?"
-                  className="w-full px-3 py-2 bg-surface-tertiary border border-border-light rounded-md text-text placeholder-text-secondary/50 focus:outline-none focus:ring-1 focus:ring-accent resize-none"
+                  className="w-full px-3 py-2 bg-surface-tertiary border border-border-light rounded-md text-text placeholder-text-secondary/50 focus:outline-none focus:ring-1 focus:ring-border-selected focus:border-border-selected resize-none"
                   rows={3}
                   autoFocus
                 />
@@ -199,10 +265,32 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
           {/* Tasks section - hidden for General context since it applies to all tasks */}
           {contextId !== GENERAL_CONTEXT_ID && (
             <div>
-              <h2 className="text-sm font-medium text-text-secondary mb-2">
-                Tasks ({contextTasks.length})
-              </h2>
-              {contextTasks.length === 0 ? (
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-medium text-text-secondary">
+                  Tasks ({contextTasks.length})
+                </h2>
+                {!isCreatingTask && (
+                  <button
+                    onClick={() => setIsCreatingTask(true)}
+                    className="flex items-center gap-1 px-2 py-1 text-xs text-text-secondary hover:text-text hover:bg-surface-tertiary rounded transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add task
+                  </button>
+                )}
+              </div>
+
+              {/* Inline task creation */}
+              {isCreatingTask && (
+                <InlineTaskEdit
+                  onClose={() => setIsCreatingTask(false)}
+                  defaultContextId={contextId}
+                />
+              )}
+
+              {contextTasks.length === 0 && !isCreatingTask ? (
                 <p className="text-sm text-text-secondary/70 italic py-2">
                   No tasks in this context
                 </p>
@@ -214,7 +302,8 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
                       task={task}
                       onComplete={() => onTaskComplete(task.id)}
                       onSelect={() => onTaskSelect(task)}
-                      onClick={() => onTaskSelect(task)}
+                      onClick={(e) => onTaskClick ? onTaskClick(task.id, e) : onTaskSelect(task)}
+                      isSelected={selectedTaskIds?.has(task.id)}
                       showDate
                     />
                   ))}
@@ -234,4 +323,4 @@ export function ContextDetailView({ contextId, onTaskSelect, onTaskComplete }: C
       />
     </div>
   )
-}
+})

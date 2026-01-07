@@ -6,9 +6,10 @@ import { TaskChat } from './components/TaskChat'
 import { InlineTaskEdit } from './components/InlineTaskEdit'
 import { SettingsModal } from './components/SettingsModal'
 import { TildaSidebar } from './components/TildaSidebar'
-import { ContextDetailView } from './components/ContextDetailView'
+import { ContextDetailView, ContextDetailViewRef } from './components/ContextDetailView'
 import { PanelLayout } from './components/PanelLayout'
 import { ControlBar } from './components/ControlBar'
+import { CalendarPicker } from './components/CalendarPicker'
 import { useLayoutState } from './hooks/useLayoutState'
 import { logger } from './utils/logger'
 import type { AILearningNote } from './types'
@@ -55,6 +56,7 @@ function App() {
   const lastSelectedTaskId = useRef<string | null>(null)
   const datePickerRef = useRef<HTMLDivElement>(null)
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const contextDetailRef = useRef<ContextDetailViewRef>(null)
 
   useEffect(() => {
     loadTasks()
@@ -104,10 +106,17 @@ function App() {
         const today = new Date().toISOString().split('T')[0]
         return t.status !== 'archived' && t.dateToWorkOn && t.dateToWorkOn.split('T')[0] > today
       })
+    } else if (currentView.startsWith('context:')) {
+      const contextId = currentView.replace('context:', '')
+      return tasks.filter(t => {
+        if (t.status === 'archived') return false
+        const taskContexts = taskContextsByTask[t.id] || []
+        return taskContexts.includes(contextId)
+      })
     } else {
       return tasks.filter(t => t.status === 'archived')
     }
-  }, [currentView, tasks])
+  }, [currentView, tasks, taskContextsByTask])
 
   // Handle task click with selection logic
   const handleTaskClick = useCallback((taskId: string, e: React.MouseEvent) => {
@@ -190,7 +199,12 @@ function App() {
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault()
         if (!activeTaskId && currentView !== 'archive') {
-          setIsCreatingTask(true)
+          // If we're in a context view, use the ref to trigger task creation
+          if (currentView.startsWith('context:') && contextDetailRef.current) {
+            contextDetailRef.current.startCreatingTask()
+          } else {
+            setIsCreatingTask(true)
+          }
         }
       }
       // Escape to go back or cancel creation or clear selection
@@ -315,10 +329,58 @@ function App() {
       ) : isContextView && currentContextId ? (
         <>
           <ContextDetailView
+            ref={contextDetailRef}
             contextId={currentContextId}
             onTaskSelect={(task) => setActiveTask(task.id)}
             onTaskComplete={(id) => completeTask(id)}
+            selectedTaskIds={selectedTaskIds}
+            onTaskClick={handleTaskClick}
           />
+          {/* Bottom Action Bar for context view */}
+          <div className="flex-shrink-0 border-t border-border-light bg-surface h-12">
+            <div className="flex items-center justify-center gap-6 h-full">
+              {/* New Task Button */}
+              <button
+                onClick={() => contextDetailRef.current?.startCreatingTask()}
+                className="p-1.5 transition-colors text-text-tertiary hover:text-text"
+                title="New task (⌘N)"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+
+              {/* Assign Date Button */}
+              <div className="relative" ref={datePickerRef}>
+                <button
+                  onClick={() => setShowDatePicker(!showDatePicker)}
+                  className={`p-1.5 transition-colors ${
+                    selectedTaskIds.size === 0
+                      ? 'text-text-tertiary opacity-50 cursor-not-allowed'
+                      : 'text-text-tertiary hover:text-text'
+                  }`}
+                  title="Assign to date"
+                  disabled={selectedTaskIds.size === 0}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </button>
+                {showDatePicker && selectedTaskIds.size > 0 && (
+                  <div
+                    className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <CalendarPicker
+                      selectedDate={undefined}
+                      onDateChange={handleBulkDateChange}
+                      onClose={() => setShowDatePicker(false)}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </>
       ) : (
         <>
@@ -390,13 +452,13 @@ function App() {
                   </button>
                   {showDatePicker && selectedTaskIds.size > 0 && (
                     <div
-                      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 bg-surface-secondary border border-border rounded-lg shadow-elevated p-2"
+                      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50"
                       onClick={e => e.stopPropagation()}
                     >
-                      <input
-                        type="date"
-                        onChange={(e) => handleBulkDateChange(e.target.value)}
-                        className="bg-surface-tertiary text-text text-sm rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-accent-blue"
+                      <CalendarPicker
+                        selectedDate={undefined}
+                        onDateChange={handleBulkDateChange}
+                        onClose={() => setShowDatePicker(false)}
                       />
                     </div>
                   )}
