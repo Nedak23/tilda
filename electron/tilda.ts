@@ -653,6 +653,20 @@ export async function sendTildaMessage(
         // Execute tools and add results
         const toolResults: Anthropic.ToolResultBlockParam[] = []
         for (const toolUse of toolUseBlocks) {
+          // Stream tool execution indicator so user sees progress
+          const toolDisplayNames: Record<string, string> = {
+            'create_task': 'Creating task',
+            'update_task': 'Updating task',
+            'complete_task': 'Completing task',
+            'delete_task': 'Deleting task',
+            'get_tasks': 'Getting tasks',
+            'get_task_details': 'Getting task details',
+            'get_contexts': 'Getting contexts',
+            'get_context_details': 'Getting context details'
+          }
+          const displayName = toolDisplayNames[toolUse.name] || toolUse.name
+          onChunk(`\n*${displayName}...*\n`)
+
           const result = executeToolCall(toolUse.name, toolUse.input as ToolInput)
           toolResults.push({
             type: 'tool_result',
@@ -774,6 +788,20 @@ export async function regenerateTildaResponse(
         // Execute tools and add results
         const toolResults: Anthropic.ToolResultBlockParam[] = []
         for (const toolUse of toolUseBlocks) {
+          // Stream tool execution indicator so user sees progress
+          const toolDisplayNames: Record<string, string> = {
+            'create_task': 'Creating task',
+            'update_task': 'Updating task',
+            'complete_task': 'Completing task',
+            'delete_task': 'Deleting task',
+            'get_tasks': 'Getting tasks',
+            'get_task_details': 'Getting task details',
+            'get_contexts': 'Getting contexts',
+            'get_context_details': 'Getting context details'
+          }
+          const displayName = toolDisplayNames[toolUse.name] || toolUse.name
+          onChunk(`\n*${displayName}...*\n`)
+
           const result = executeToolCall(toolUse.name, toolUse.input as ToolInput)
           toolResults.push({
             type: 'tool_result',
