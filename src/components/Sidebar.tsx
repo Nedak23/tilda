@@ -55,13 +55,12 @@ export function Sidebar() {
     currentView,
     setCurrentView,
     getTodayTasks,
-    getUpcomingTasks,
     contexts,
     createContext,
     deleteContext,
     reorderContext,
-    tasks,
-    taskContextsByTask
+    updateContext,
+    addContextDocument
   } = useTaskStore()
 
   const sensors = useSensors(
@@ -79,28 +78,35 @@ export function Sidebar() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
   const todayCount = getTodayTasks().length
-  const upcomingCount = getUpcomingTasks().length
 
   const getCounts = (id: ViewType): number | undefined => {
     if (id === 'today') return todayCount > 0 ? todayCount : undefined
-    if (id === 'upcoming') return upcomingCount > 0 ? upcomingCount : undefined
     return undefined
   }
 
-  // Count tasks in each context (only non-archived tasks)
-  const getContextTaskCount = (contextId: string): number => {
-    return tasks.filter(task => {
-      if (task.status === 'archived') return false
-      const taskContexts = taskContextsByTask[task.id] || []
-      return taskContexts.includes(contextId)
-    }).length
-  }
-
-  const handleCreateContext = async (name: string, description?: string) => {
+  const handleCreateContext = async (name: string, description?: string, files?: File[]) => {
     try {
-      await createContext({ name, description })
+      const context = await createContext({ name, description })
+      // Upload files after context is created
+      if (files && files.length > 0 && context) {
+        const results = await Promise.allSettled(
+          files.map(file => addContextDocument(context.id, file))
+        )
+        const failures = results.filter(r => r.status === 'rejected')
+        if (failures.length > 0) {
+          logger.error(`Failed to upload ${failures.length} of ${files.length} files`)
+        }
+      }
     } catch (error) {
       logger.error('Failed to create context:', error)
+    }
+  }
+
+  const handleRenameContext = async (contextId: string, newName: string) => {
+    try {
+      await updateContext(contextId, { name: newName })
+    } catch (error) {
+      logger.error('Failed to rename context:', error)
     }
   }
 
@@ -209,9 +215,9 @@ export function Sidebar() {
                       <SortableContextItem
                         context={context}
                         isActive={currentView === `context:${context.id}`}
-                        taskCount={getContextTaskCount(context.id)}
                         onSelect={() => setCurrentView(`context:${context.id}`)}
                         onDelete={() => handleDeleteContext(context.id)}
+                        onRename={(newName) => handleRenameContext(context.id, newName)}
                       />
                     </li>
                   ))}
