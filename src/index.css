@@ -56,7 +56,7 @@ button:focus-visible {
 }
 
 .checkbox.checked {
-  @apply bg-success border-success;
+  @apply bg-text-secondary border-text-secondary;
 }
 
 /* Task item hover state */
@@ -122,6 +122,20 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 .animate-slide-up {
   animation: slide-up 0.3s ease-out;
+}
+
+/* Task completion fade-out animation */
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.animate-complete-out {
+  animation: fade-out 0.5s ease-out forwards;
 }
 
 /* Resize handle styling */

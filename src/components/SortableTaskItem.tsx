@@ -16,6 +16,7 @@ interface SortableTaskItemProps {
   onStartEdit?: () => void
   onCloseEdit?: () => void
   onExpandChat?: () => void
+  onSaveAndCreateNew?: () => void
 }
 
 export function SortableTaskItem({
@@ -30,7 +31,8 @@ export function SortableTaskItem({
   isEditing,
   onStartEdit,
   onCloseEdit,
-  onExpandChat
+  onExpandChat,
+  onSaveAndCreateNew
 }: SortableTaskItemProps) {
   const {
     attributes,
@@ -85,6 +87,7 @@ export function SortableTaskItem({
         onStartEdit={onStartEdit}
         onCloseEdit={onCloseEdit}
         onExpandChat={onExpandChat}
+        onSaveAndCreateNew={onSaveAndCreateNew}
       />
     </div>
   )

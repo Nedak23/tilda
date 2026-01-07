@@ -50,6 +50,7 @@ interface TaskListProps {
   onClearSelection: () => void
   editingTaskId: string | null
   onEditingTaskIdChange: (taskId: string | null) => void
+  onSaveAndCreateNew?: () => void
 }
 
 interface DateGroup {
@@ -83,7 +84,7 @@ function groupTasksByDate(tasks: Task[], dateField: 'dateToWorkOn' | 'completion
     }))
 }
 
-export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSelection, editingTaskId, onEditingTaskIdChange }: TaskListProps) {
+export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSelection, editingTaskId, onEditingTaskIdChange, onSaveAndCreateNew }: TaskListProps) {
   const {
     currentView,
     setActiveTask,
@@ -185,6 +186,7 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
                 onStartEdit={() => onEditingTaskIdChange(task.id)}
                 onCloseEdit={() => onEditingTaskIdChange(null)}
                 onExpandChat={() => setActiveTask(task.id)}
+                onSaveAndCreateNew={onSaveAndCreateNew}
               />
             ))}
           </div>
@@ -233,6 +235,7 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
                   onStartEdit={() => onEditingTaskIdChange(task.id)}
                   onCloseEdit={() => onEditingTaskIdChange(null)}
                   onExpandChat={() => setActiveTask(task.id)}
+                  onSaveAndCreateNew={onSaveAndCreateNew}
                 />
               ))}
             </div>
@@ -274,6 +277,7 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
                 onStartEdit={() => onEditingTaskIdChange(task.id)}
                 onCloseEdit={() => onEditingTaskIdChange(null)}
                 onExpandChat={() => setActiveTask(task.id)}
+                onSaveAndCreateNew={onSaveAndCreateNew}
               />
             ))}
           </div>

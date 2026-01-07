@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, isValid } from 'date-fns'
 import { useTaskStore } from '../stores/taskStore'
 import { ChatMessage } from './ChatMessage'
 import { CalendarPicker } from './CalendarPicker'
@@ -15,9 +15,10 @@ interface InlineTaskEditProps {
   onComplete?: () => void
   defaultDate?: string
   defaultContextId?: string
+  onSaveAndCreateNew?: () => void
 }
 
-export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaultDate, defaultContextId }: InlineTaskEditProps) {
+export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaultDate, defaultContextId, onSaveAndCreateNew }: InlineTaskEditProps) {
   const {
     messagesByTask,
     attachmentsByTask,
@@ -63,6 +64,7 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
   const datePickerRef = useRef<HTMLDivElement>(null)
   const deadlinePickerRef = useRef<HTMLDivElement>(null)
   const contextPickerRef = useRef<HTMLDivElement>(null)
+  const descriptionRef = useRef<HTMLTextAreaElement>(null)
 
   // Load messages when component mounts (edit mode only)
   useEffect(() => {
@@ -97,6 +99,19 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
     nameInputRef.current?.focus()
   }, [])
 
+  // Auto-resize description textarea
+  const autoResizeDescription = () => {
+    const textarea = descriptionRef.current
+    if (textarea) {
+      textarea.style.height = 'auto'
+      textarea.style.height = `${textarea.scrollHeight}px`
+    }
+  }
+
+  useEffect(() => {
+    autoResizeDescription()
+  }, [editedDescription])
+
   // Handle click outside to close and save
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -120,16 +135,23 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
     }
   }, [editedName, editedDescription, localDate, localDeadline, localContextIds, activeTask])
 
-  // Handle escape key
+  // Handle escape key and Cmd+N (save before switching to new task)
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         handleSaveAndClose()
+      }
+      // Cmd/Ctrl + N: save current task, then signal to create new one
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault()
+        e.stopPropagation()
+        await handleSaveAndClose()
+        onSaveAndCreateNew?.()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editedName, editedDescription, localDate, localDeadline, localContextIds, activeTask])
+  }, [editedName, editedDescription, localDate, localDeadline, localContextIds, activeTask, onSaveAndCreateNew])
 
   // Handle click outside to close dropdowns
   useEffect(() => {
@@ -327,7 +349,7 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
   return (
     <div
       ref={containerRef}
-      className="mx-2 mb-2 rounded-lg border border-border bg-surface-secondary animate-fade-in"
+      className="mx-2 my-4 rounded-lg border border-border bg-surface-secondary animate-fade-in"
     >
       {/* Header section with checkbox, name, description */}
       <div className="p-4">
@@ -367,14 +389,48 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
               placeholder="Task name"
               className="w-full bg-transparent text-text text-sm font-medium placeholder-text-tertiary focus:outline-none"
             />
-            <input
-              type="text"
-              value={editedDescription}
-              onChange={e => setEditedDescription(e.target.value)}
-              onBlur={handleDescriptionBlur}
-              placeholder="Notes"
-              className="w-full bg-transparent text-text-secondary text-sm placeholder-text-tertiary focus:outline-none mt-1"
-            />
+            <div className="flex items-start gap-2 mt-1">
+              <textarea
+                ref={descriptionRef}
+                value={editedDescription}
+                onChange={e => setEditedDescription(e.target.value)}
+                onBlur={handleDescriptionBlur}
+                placeholder="Notes"
+                rows={1}
+                className="flex-1 bg-transparent text-text-secondary text-sm placeholder-text-tertiary focus:outline-none resize-none overflow-hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="p-1 text-text-tertiary hover:text-text transition-colors flex-shrink-0"
+                title="Attach file"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+              </button>
+            </div>
+            {/* Attachments display */}
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {attachments.map(attachment => (
+                  <div
+                    key={attachment.id}
+                    className="flex items-center gap-2 px-2 py-1 bg-surface-tertiary rounded text-xs text-text-secondary"
+                  >
+                    <span className="truncate max-w-[120px]">{attachment.filename}</span>
+                    {activeTask && (
+                      <button
+                        onClick={() => removeAttachment(attachment.id, activeTask.id)}
+                        className="text-text-tertiary hover:text-error transition-colors"
+                        aria-label="Remove attachment"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -492,6 +548,7 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
                     showQuickOptions={false}
                     showClearButton={!!currentDeadline}
                     onClear={handleClearDeadline}
+                    defaultMonth={currentDate && isValid(parseISO(currentDate)) ? parseISO(currentDate) : undefined}
                   />
                 </div>
               )}
@@ -512,29 +569,6 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
           </div>
         </div>
       </div>
-
-      {/* Attachments */}
-      {attachments.length > 0 && activeTask && (
-        <div className="px-4 pb-3 ml-7">
-          <div className="flex flex-wrap gap-2">
-            {attachments.map(attachment => (
-              <div
-                key={attachment.id}
-                className="flex items-center gap-2 px-2 py-1 bg-surface-tertiary rounded text-xs text-text-secondary"
-              >
-                <span className="truncate max-w-[120px]">{attachment.filename}</span>
-                <button
-                  onClick={() => removeAttachment(attachment.id, activeTask.id)}
-                  className="text-text-tertiary hover:text-error transition-colors"
-                  aria-label="Remove attachment"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Chat area */}
       <div className="flex flex-col border-t border-border">

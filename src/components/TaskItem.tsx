@@ -1,4 +1,8 @@
+import { useState, useRef, useEffect } from 'react'
 import { format, differenceInDays, startOfDay, parseISO } from 'date-fns'
+
+// Animation duration in ms - keep in sync with CSS .animate-complete-out
+const COMPLETION_ANIMATION_DURATION = 500
 import { GENERAL_CONTEXT_ID } from '../types'
 import { InlineTaskEdit } from './InlineTaskEdit'
 import type { Task, Context } from '../types'
@@ -16,6 +20,7 @@ interface TaskItemProps {
   onStartEdit?: () => void
   onCloseEdit?: () => void
   onExpandChat?: () => void
+  onSaveAndCreateNew?: () => void
 }
 
 export function TaskItem({
@@ -30,11 +35,42 @@ export function TaskItem({
   isEditing = false,
   onStartEdit,
   onCloseEdit,
-  onExpandChat
+  onExpandChat,
+  onSaveAndCreateNew
 }: TaskItemProps) {
+  const [isCompleting, setIsCompleting] = useState(false)
+  const completionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (completionTimerRef.current) {
+        clearTimeout(completionTimerRef.current)
+      }
+    }
+  }, [])
+
   const handleCheckboxClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    onComplete()
+    // If already archived (reopening), do immediate action
+    if (task.status === 'archived') {
+      onComplete()
+      return
+    }
+    // If already completing, cancel the completion
+    if (isCompleting) {
+      if (completionTimerRef.current) {
+        clearTimeout(completionTimerRef.current)
+        completionTimerRef.current = null
+      }
+      setIsCompleting(false)
+      return
+    }
+    // Start completion animation
+    setIsCompleting(true)
+    completionTimerRef.current = setTimeout(() => {
+      onComplete()
+    }, COMPLETION_ANIMATION_DURATION)
   }
 
   const handleClick = (e: React.MouseEvent) => {
@@ -84,6 +120,7 @@ export function TaskItem({
         onClose={onCloseEdit}
         onExpandChat={onExpandChat}
         onComplete={onComplete}
+        onSaveAndCreateNew={onSaveAndCreateNew}
       />
     )
   }
@@ -95,15 +132,32 @@ export function TaskItem({
       className={`
         group flex items-center gap-3 pl-4 pr-4 py-1 mx-2 cursor-pointer rounded-lg select-none
         ${isSelected ? 'bg-accent-blue/30' : ''}
+        ${isCompleting ? 'animate-complete-out' : ''}
       `}
     >
       {/* Checkbox */}
-      {task.status !== 'archived' ? (
+      {task.status !== 'archived' && !isCompleting ? (
         <button
           onClick={handleCheckboxClick}
           className="checkbox flex-shrink-0"
           aria-label="Complete task"
         />
+      ) : task.status !== 'archived' && isCompleting ? (
+        <button
+          onClick={handleCheckboxClick}
+          className="checkbox checked flex-shrink-0"
+          aria-label="Completing task"
+        >
+          <svg
+            className="w-2.5 h-2.5 text-white"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={3}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </button>
       ) : (
         <button
           onClick={handleCheckboxClick}
