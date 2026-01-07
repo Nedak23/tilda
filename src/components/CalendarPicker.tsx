@@ -8,6 +8,7 @@ interface CalendarPickerProps {
   showQuickOptions?: boolean
   showClearButton?: boolean
   onClear?: () => void
+  defaultMonth?: Date
 }
 
 export function CalendarPicker({
@@ -16,9 +17,10 @@ export function CalendarPicker({
   onClose,
   showQuickOptions = true,
   showClearButton = false,
-  onClear
+  onClear,
+  defaultMonth
 }: CalendarPickerProps) {
-  const [pickerMonth, setPickerMonth] = useState(new Date())
+  const [pickerMonth, setPickerMonth] = useState(defaultMonth || new Date())
   const todayDate = new Date()
 
   // Quick date options

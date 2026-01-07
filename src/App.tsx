@@ -187,9 +187,10 @@ function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Cmd/Ctrl + N to create new task
+      // Note: If InlineTaskEdit is open, it handles Cmd+N with stopPropagation, so this won't fire
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault()
-        if (!activeTaskId && currentView !== 'archive') {
+        if (currentView !== 'archive' && !editingTaskId && !isCreatingTask) {
           setIsCreatingTask(true)
         }
       }
@@ -337,6 +338,7 @@ function App() {
           {isCreatingTask && (
             <InlineTaskEdit
               onClose={() => setIsCreatingTask(false)}
+              onSaveAndCreateNew={() => setIsCreatingTask(true)}
             />
           )}
 
@@ -349,6 +351,10 @@ function App() {
               onClearSelection={handleClearSelection}
               editingTaskId={editingTaskId}
               onEditingTaskIdChange={setEditingTaskId}
+              onSaveAndCreateNew={() => {
+                setEditingTaskId(null)
+                setIsCreatingTask(true)
+              }}
             />
           </div>
 
