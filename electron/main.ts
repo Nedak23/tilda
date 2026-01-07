@@ -32,6 +32,7 @@ import {
   deleteTildaMessagesFromId,
   updateTildaMessageContent,
   getTildaAttachments,
+  getPendingTildaAttachments,
   createTildaAttachment,
   deleteTildaAttachment,
   clearTildaAttachments,
@@ -289,6 +290,10 @@ ipcMain.handle('tilda:regenerateResponse', async (event, channel: string) => {
 // IPC Handlers for Tilda Attachments
 ipcMain.handle('tildaAttachments:getAll', () => {
   return getTildaAttachments()
+})
+
+ipcMain.handle('tildaAttachments:getPending', () => {
+  return getPendingTildaAttachments()
 })
 
 ipcMain.handle('tildaAttachments:create', (_event, filename: string, content: string, mimeType: string) => {

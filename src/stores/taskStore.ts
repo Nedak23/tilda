@@ -23,7 +23,8 @@ interface TaskStore {
 
   // Tilda state
   tildaMessages: TildaMessage[]
-  tildaAttachments: TildaAttachment[]
+  tildaAttachments: TildaAttachment[]  // All attachments (for message display lookup)
+  pendingTildaAttachments: TildaAttachment[]  // Pending attachments (for input area)
   isTildaPending: boolean
   tildaStreamingContent: string
 
@@ -73,6 +74,7 @@ interface TaskStore {
   sendTildaMessage: (content: string) => Promise<void>
   clearTildaHistory: () => Promise<void>
   loadTildaAttachments: () => Promise<void>
+  loadPendingTildaAttachments: () => Promise<void>
   addTildaAttachment: (file: File) => Promise<void>
   removeTildaAttachment: (id: string) => Promise<void>
   retryTildaMessage: (messageId: string) => Promise<void>
@@ -117,6 +119,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   pendingResponses: new Set(),
   tildaMessages: [],
   tildaAttachments: [],
+  pendingTildaAttachments: [],
   isTildaPending: false,
   tildaStreamingContent: '',
   contexts: [],
@@ -187,12 +190,10 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   completeTask: async (id) => {
     try {
       const completedTask = await window.api.tasks.complete(id)
-      // Reload tasks to get any new recurring instances
-      await get().loadTasks()
-      // Update the specific task
-      set(state => ({
-        tasks: state.tasks.map(t => t.id === id ? completedTask : t)
-      }))
+      // Fetch updated tasks to get any new recurring instances
+      // without triggering isLoading state change
+      const tasks = await window.api.tasks.getAll()
+      set({ tasks: tasks.map(t => t.id === id ? completedTask : t) })
     } catch (error) {
       set({ error: (error as Error).message })
       throw error
@@ -287,7 +288,10 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   reorderTask: async (id, newPosition) => {
     try {
       await window.api.tasks.reorder(id, newPosition)
-      await get().loadTasks()
+      // Fetch updated tasks without triggering isLoading state change
+      // This prevents unnecessary re-renders that can affect panel layout
+      const tasks = await window.api.tasks.getAll()
+      set({ tasks })
     } catch (error) {
       set({ error: (error as Error).message })
       throw error
@@ -692,16 +696,25 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   sendTildaMessage: async (content) => {
     set({ isTildaPending: true, tildaStreamingContent: '' })
 
-    // Optimistically add user message
+    // Capture current pending attachments before sending (they will be linked to the message)
+    const currentAttachments = get().pendingTildaAttachments
+    const attachmentIds = currentAttachments.map(a => a.id)
+
+    // Optimistically add user message with attachment IDs
     const tempUserMessage: TildaMessage = {
       id: `temp-${Date.now()}`,
       sender: 'user',
       content,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined
     }
 
     set(state => ({
-      tildaMessages: [...state.tildaMessages, tempUserMessage]
+      tildaMessages: [...state.tildaMessages, tempUserMessage],
+      // Clear pending attachments optimistically since they're now part of the message
+      pendingTildaAttachments: []
+      // Note: currentAttachments are already in tildaAttachments from addTildaAttachment,
+      // so no need to add them again here
     }))
 
     // Track streaming response
@@ -713,8 +726,10 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         set({ tildaStreamingContent: streamedContent })
       })
 
-      // Reload messages to get persisted versions and refresh tasks (tools may have modified them)
+      // Reload messages and attachments to get persisted versions, refresh tasks (tools may have modified them)
       await get().loadTildaMessages()
+      await get().loadTildaAttachments()
+      await get().loadPendingTildaAttachments()
       await get().loadTasks()
     } catch (error) {
       const errorMessage = (error as Error).message
@@ -739,7 +754,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   clearTildaHistory: async () => {
     try {
       await window.api.tilda.clearHistory()
-      set({ tildaMessages: [], tildaAttachments: [] })
+      set({ tildaMessages: [], tildaAttachments: [], pendingTildaAttachments: [] })
     } catch (error) {
       logger.error('Failed to clear Tilda history:', error)
       set({ error: (error as Error).message })
@@ -750,6 +765,15 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     try {
       const attachments = await window.api.tildaAttachments.getAll()
       set({ tildaAttachments: attachments })
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
+  loadPendingTildaAttachments: async () => {
+    try {
+      const attachments = await window.api.tildaAttachments.getPending()
+      set({ pendingTildaAttachments: attachments })
     } catch (error) {
       set({ error: (error as Error).message })
     }
@@ -766,7 +790,9 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         mimeType
       )
       set(state => ({
-        tildaAttachments: [...state.tildaAttachments, attachment]
+        // Add to both: all attachments (for lookup) and pending (for input area)
+        tildaAttachments: [...state.tildaAttachments, attachment],
+        pendingTildaAttachments: [...state.pendingTildaAttachments, attachment]
       }))
     } catch (error) {
       set({ error: (error as Error).message })
@@ -778,7 +804,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     try {
       await window.api.tildaAttachments.delete(id)
       set(state => ({
-        tildaAttachments: state.tildaAttachments.filter(a => a.id !== id)
+        tildaAttachments: state.tildaAttachments.filter(a => a.id !== id),
+        pendingTildaAttachments: state.pendingTildaAttachments.filter(a => a.id !== id)
       }))
     } catch (error) {
       set({ error: (error as Error).message })

@@ -3,7 +3,8 @@ import { logger } from './logger'
 import {
   getTildaMessages,
   createTildaMessage,
-  getTildaAttachments,
+  getPendingTildaAttachments,
+  clearTildaAttachments,
   createTask,
   updateTask,
   reopenTask,
@@ -595,15 +596,16 @@ export async function sendTildaMessage(
   userMessage: string,
   onChunk: (chunk: string) => void
 ): Promise<string> {
-  // Save user message
-  createTildaMessage(userMessage, 'user')
+  // Get pending attachments for this message before creating the message
+  const attachments = getPendingTildaAttachments()
+  const attachmentIds = attachments.map(a => a.id)
+
+  // Save user message with attachment IDs
+  createTildaMessage(userMessage, 'user', attachmentIds.length > 0 ? attachmentIds : undefined)
 
   // Get conversation history (excluding the message we just added)
   const history = getTildaMessages()
   history.pop()
-
-  // Get attachments for this message
-  const attachments = getTildaAttachments()
 
   const client = getClient()
   abortController = new AbortController()
@@ -680,6 +682,9 @@ export async function sendTildaMessage(
       // Save agent response
       createTildaMessage(fullResponse, 'agent')
 
+      // Clear attachments after they've been used (they're now linked to the user message)
+      clearTildaAttachments()
+
       return fullResponse
     }
   } catch (error) {
@@ -720,8 +725,8 @@ export async function regenerateTildaResponse(
   // Get history without the last user message (it will be the current message)
   const historyWithoutLast = history.slice(0, -1)
 
-  // Get attachments for this message
-  const attachments = getTildaAttachments()
+  // Get pending attachments for this message
+  const attachments = getPendingTildaAttachments()
 
   const client = getClient()
   abortController = new AbortController()
@@ -797,6 +802,9 @@ export async function regenerateTildaResponse(
 
       // Save agent response
       createTildaMessage(fullResponse, 'agent')
+
+      // Clear any pending attachments (they were used in the retry)
+      clearTildaAttachments()
 
       return fullResponse
     }

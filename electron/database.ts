@@ -83,7 +83,8 @@ export function initDatabase(): void {
       id TEXT PRIMARY KEY,
       sender TEXT CHECK(sender IN ('user', 'agent')) NOT NULL,
       content TEXT NOT NULL,
-      timestamp TEXT NOT NULL
+      timestamp TEXT NOT NULL,
+      attachment_ids TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_tilda_messages_timestamp ON tilda_messages(timestamp);
@@ -149,6 +150,18 @@ export function initDatabase(): void {
 
   // Ensure the General context exists
   ensureGeneralContext()
+
+  // Run migrations for existing databases
+  runMigrations()
+}
+
+function runMigrations(): void {
+  // Add attachment_ids column to tilda_messages if it doesn't exist
+  const columns = db.prepare('PRAGMA table_info(tilda_messages)').all() as { name: string }[]
+  const hasAttachmentIds = columns.some(col => col.name === 'attachment_ids')
+  if (!hasAttachmentIds) {
+    db.exec('ALTER TABLE tilda_messages ADD COLUMN attachment_ids TEXT')
+  }
 }
 
 function ensureGeneralContext(): void {
@@ -571,11 +584,22 @@ export function deleteAttachment(id: string): void {
 // Tilda message operations
 
 function rowToTildaMessage(row: Record<string, unknown>): TildaMessage {
+  const attachmentIdsStr = row.attachment_ids as string | null
+  let attachmentIds: string[] | undefined
+  if (attachmentIdsStr) {
+    try {
+      attachmentIds = JSON.parse(attachmentIdsStr)
+    } catch {
+      // Malformed JSON - ignore and treat as no attachments
+      attachmentIds = undefined
+    }
+  }
   return {
     id: row.id as string,
     sender: row.sender as MessageSender,
     content: row.content as string,
-    timestamp: row.timestamp as string
+    timestamp: row.timestamp as string,
+    attachmentIds
   }
 }
 
@@ -586,20 +610,23 @@ export function getTildaMessages(): TildaMessage[] {
   return rows.map(row => rowToTildaMessage(row as Record<string, unknown>))
 }
 
-export function createTildaMessage(content: string, sender: MessageSender): TildaMessage {
+export function createTildaMessage(content: string, sender: MessageSender, attachmentIds?: string[]): TildaMessage {
   const id = uuidv4()
   const timestamp = new Date().toISOString()
+  const attachmentIdsStr = attachmentIds && attachmentIds.length > 0 ? JSON.stringify(attachmentIds) : null
 
   db.prepare(`
-    INSERT INTO tilda_messages (id, sender, content, timestamp)
-    VALUES (?, ?, ?, ?)
-  `).run(id, sender, content, timestamp)
+    INSERT INTO tilda_messages (id, sender, content, timestamp, attachment_ids)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(id, sender, content, timestamp, attachmentIdsStr)
 
-  return { id, sender, content, timestamp }
+  return { id, sender, content, timestamp, attachmentIds }
 }
 
 export function clearTildaMessages(): void {
   db.prepare('DELETE FROM tilda_messages').run()
+  // Also clear attachments since they are now linked to messages
+  db.prepare('DELETE FROM tilda_attachments').run()
 }
 
 export function deleteTildaMessage(id: string): void {
@@ -643,6 +670,41 @@ export function getTildaAttachments(): TildaAttachment[] {
   return rows.map(row => rowToTildaAttachment(row as Record<string, unknown>))
 }
 
+export function getTildaAttachmentById(id: string): TildaAttachment | undefined {
+  const row = db.prepare('SELECT * FROM tilda_attachments WHERE id = ?').get(id)
+  return row ? rowToTildaAttachment(row as Record<string, unknown>) : undefined
+}
+
+export function getTildaAttachmentsByIds(ids: string[]): TildaAttachment[] {
+  if (ids.length === 0) return []
+  const placeholders = ids.map(() => '?').join(',')
+  const rows = db.prepare(
+    `SELECT * FROM tilda_attachments WHERE id IN (${placeholders}) ORDER BY created_at ASC`
+  ).all(...ids)
+  return rows.map(row => rowToTildaAttachment(row as Record<string, unknown>))
+}
+
+export function getPendingTildaAttachments(): TildaAttachment[] {
+  // Get all attachment IDs that are linked to messages
+  const messagesWithAttachments = db.prepare(
+    "SELECT attachment_ids FROM tilda_messages WHERE attachment_ids IS NOT NULL AND attachment_ids != ''"
+  ).all() as { attachment_ids: string }[]
+
+  const linkedIds = new Set<string>()
+  for (const msg of messagesWithAttachments) {
+    try {
+      const ids = JSON.parse(msg.attachment_ids) as string[]
+      ids.forEach(id => linkedIds.add(id))
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  // Get all attachments that are NOT linked to any message
+  const allAttachments = getTildaAttachments()
+  return allAttachments.filter(a => !linkedIds.has(a.id))
+}
+
 export function createTildaAttachment(
   filename: string,
   content: string,
@@ -664,7 +726,13 @@ export function deleteTildaAttachment(id: string): void {
 }
 
 export function clearTildaAttachments(): void {
-  db.prepare('DELETE FROM tilda_attachments').run()
+  // Only clear pending attachments (those not linked to any message)
+  const pending = getPendingTildaAttachments()
+  if (pending.length === 0) return
+
+  const placeholders = pending.map(() => '?').join(',')
+  const ids = pending.map(a => a.id)
+  db.prepare(`DELETE FROM tilda_attachments WHERE id IN (${placeholders})`).run(...ids)
 }
 
 // Search tasks for Tilda tool

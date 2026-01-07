@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { format } from 'date-fns'
 import { useTaskStore } from '../stores/taskStore'
 import { isFileSupported, FILE_INPUT_ACCEPT } from '../utils/fileUtils'
 import { logger } from '../utils/logger'
 import { MarkdownContent } from './MarkdownContent'
-import type { TildaMessage } from '../types'
+import type { TildaMessage, TildaAttachment } from '../types'
 
 const MAX_CHARS_BEFORE_TRUNCATE = 500
 
@@ -14,12 +14,13 @@ interface TildaSidebarProps {
 
 interface TildaChatMessageProps {
   message: TildaMessage
+  attachments?: TildaAttachment[]
   isStreaming?: boolean
   onRetry?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
 }
 
-function TildaChatMessage({ message, isStreaming = false, onRetry, onEdit }: TildaChatMessageProps) {
+function TildaChatMessage({ message, attachments = [], isStreaming = false, onRetry, onEdit }: TildaChatMessageProps) {
   const isUser = message.sender === 'user'
   const [isExpanded, setIsExpanded] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
@@ -142,6 +143,22 @@ function TildaChatMessage({ message, isStreaming = false, onRetry, onEdit }: Til
               </div>
             ) : (
               <>
+                {/* Attachments display */}
+                {attachments.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {attachments.map(attachment => (
+                      <div
+                        key={attachment.id}
+                        className="flex items-center gap-1 px-2 py-0.5 bg-surface-secondary rounded text-2xs text-text-tertiary"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                        <span className="truncate max-w-[80px]">{attachment.filename}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="text-sm text-text break-words">
                   <MarkdownContent content={displayContent} />
                 </div>
@@ -214,10 +231,12 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
   const {
     tildaMessages,
     tildaAttachments,
+    pendingTildaAttachments,
     isTildaPending,
     tildaStreamingContent,
     loadTildaMessages,
     loadTildaAttachments,
+    loadPendingTildaAttachments,
     sendTildaMessage,
     clearTildaHistory,
     addTildaAttachment,
@@ -231,8 +250,9 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
     if (isOpen) {
       loadTildaMessages()
       loadTildaAttachments()
+      loadPendingTildaAttachments()
     }
-  }, [isOpen, loadTildaMessages, loadTildaAttachments])
+  }, [isOpen, loadTildaMessages, loadTildaAttachments, loadPendingTildaAttachments])
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -246,6 +266,23 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
       textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px'
     }
   }, [input])
+
+  // Create a map of attachments by ID for quick lookup when rendering messages
+  const attachmentsById = useMemo(() => {
+    const map = new Map<string, TildaAttachment>()
+    for (const attachment of tildaAttachments) {
+      map.set(attachment.id, attachment)
+    }
+    return map
+  }, [tildaAttachments])
+
+  // Helper to get attachments for a message
+  const getMessageAttachments = (message: TildaMessage): TildaAttachment[] => {
+    if (!message.attachmentIds || message.attachmentIds.length === 0) return []
+    return message.attachmentIds
+      .map(id => attachmentsById.get(id))
+      .filter((a): a is TildaAttachment => a !== undefined)
+  }
 
   const handleSubmit = async () => {
     if (!input.trim() || isTildaPending) return
@@ -294,7 +331,7 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3 hide-scrollbar">
+      <div className="flex-1 overflow-y-auto overflow-x-visible p-3 pt-8 space-y-3 hide-scrollbar">
         {tildaMessages.length === 0 && !tildaStreamingContent && (
           <div className="h-full flex flex-col items-center justify-center text-text-tertiary text-sm">
             <span className="text-5xl font-bold text-text-secondary mb-2">~</span>
@@ -310,6 +347,7 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
           <TildaChatMessage
             key={message.id}
             message={message}
+            attachments={getMessageAttachments(message)}
             onRetry={retryTildaMessage}
             onEdit={editAndResendTildaMessage}
           />
@@ -340,11 +378,11 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Attachments */}
-      {tildaAttachments.length > 0 && (
+      {/* Pending Attachments (for input area) */}
+      {pendingTildaAttachments.length > 0 && (
         <div className="flex-shrink-0 px-3 pb-2 border-t border-border-light pt-2">
           <div className="flex flex-wrap gap-1.5">
-            {tildaAttachments.map(attachment => (
+            {pendingTildaAttachments.map(attachment => (
               <div
                 key={attachment.id}
                 className="flex items-center gap-1.5 px-2 py-1 bg-surface-tertiary rounded text-xs text-text-secondary"
@@ -364,7 +402,7 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
       )}
 
       {/* Input */}
-      <div className={`flex-shrink-0 px-3 h-12 flex items-center ${tildaAttachments.length === 0 ? 'border-t border-border-light' : ''}`}>
+      <div className={`flex-shrink-0 px-3 h-12 flex items-center ${pendingTildaAttachments.length === 0 ? 'border-t border-border-light' : ''}`}>
         <div className="flex items-center gap-2 w-full">
           {/* Attach button */}
           <button

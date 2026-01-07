@@ -120,6 +120,7 @@ export interface TildaMessage {
   sender: MessageSender
   content: string
   timestamp: string
+  attachmentIds?: string[]
 }
 
 export interface TildaAttachment {
@@ -132,6 +133,7 @@ export interface TildaAttachment {
 
 export interface TildaAttachmentsAPI {
   getAll: () => Promise<TildaAttachment[]>
+  getPending: () => Promise<TildaAttachment[]>
   create: (filename: string, content: string, mimeType: string) => Promise<TildaAttachment>
   delete: (id: string) => Promise<void>
   clear: () => Promise<void>
