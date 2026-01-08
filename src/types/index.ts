@@ -68,6 +68,7 @@ export interface UpdateTaskInput {
   description?: string
   sortPosition?: number
   contextIds?: string[]
+  recurrenceRule?: RecurrenceRule | null
 }
 
 // IPC API types
