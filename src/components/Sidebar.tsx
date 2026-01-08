@@ -124,8 +124,9 @@ export function Sidebar() {
     const { active, over } = event
 
     if (over && active.id !== over.id) {
-      const oldIndex = contexts.findIndex(c => c.id === active.id)
-      const newIndex = contexts.findIndex(c => c.id === over.id)
+      const sortedContexts = [...contexts].sort((a, b) => a.sortPosition - b.sortPosition)
+      const oldIndex = sortedContexts.findIndex(c => c.id === active.id)
+      const newIndex = sortedContexts.findIndex(c => c.id === over.id)
 
       if (oldIndex !== -1 && newIndex !== -1) {
         try {

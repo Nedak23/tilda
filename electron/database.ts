@@ -459,31 +459,30 @@ export function deleteTask(id: string): void {
   db.prepare('DELETE FROM tasks WHERE id = ?').run(id)
 }
 
-export function reorderTask(id: string, newPosition: number): void {
+export function reorderTask(id: string, newIndex: number): void {
   const task = getTaskById(id)
   if (!task) throw new Error(`Task ${id} not found`)
 
-  const oldPosition = task.sortPosition
+  // Get all tasks of same status, sorted by sortPosition
+  const tasksInStatus = db.prepare(
+    'SELECT id, sort_position FROM tasks WHERE status = ? ORDER BY sort_position ASC'
+  ).all(task.status) as { id: string; sort_position: number }[]
 
-  if (newPosition === oldPosition) return
+  const currentIndex = tasksInStatus.findIndex(t => t.id === id)
+  if (currentIndex === -1 || currentIndex === newIndex) return
+  if (newIndex < 0 || newIndex >= tasksInStatus.length) return
 
-  if (newPosition < oldPosition) {
-    // Moving up: increment positions of tasks between new and old position
-    db.prepare(`
-      UPDATE tasks
-      SET sort_position = sort_position + 1
-      WHERE status = ? AND sort_position >= ? AND sort_position < ?
-    `).run(task.status, newPosition, oldPosition)
-  } else {
-    // Moving down: decrement positions of tasks between old and new position
-    db.prepare(`
-      UPDATE tasks
-      SET sort_position = sort_position - 1
-      WHERE status = ? AND sort_position > ? AND sort_position <= ?
-    `).run(task.status, oldPosition, newPosition)
-  }
+  // Reorder array in memory
+  const reordered = [...tasksInStatus]
+  const [removed] = reordered.splice(currentIndex, 1)
+  reordered.splice(newIndex, 0, removed)
 
-  db.prepare('UPDATE tasks SET sort_position = ? WHERE id = ?').run(newPosition, id)
+  // Normalize: Assign fresh sortPositions (0, 1, 2, ...)
+  const updateStmt = db.prepare('UPDATE tasks SET sort_position = ? WHERE id = ?')
+  const updateAll = db.transaction(() => {
+    reordered.forEach((t, idx) => updateStmt.run(idx, t.id))
+  })
+  updateAll()
 }
 
 export function clearUnreadAgentMessage(id: string): void {
@@ -883,29 +882,30 @@ export function deleteContext(id: string): void {
   db.prepare('DELETE FROM contexts WHERE id = ?').run(id)
 }
 
-export function reorderContext(id: string, newPosition: number): void {
+export function reorderContext(id: string, newIndex: number): void {
   const context = getContextById(id)
   if (!context) throw new Error(`Context ${id} not found`)
 
-  const oldPosition = context.sortPosition
+  // Get all contexts sorted by sortPosition
+  const allContexts = db.prepare(
+    'SELECT id, sort_position FROM contexts ORDER BY sort_position ASC'
+  ).all() as { id: string; sort_position: number }[]
 
-  if (newPosition === oldPosition) return
+  const currentIndex = allContexts.findIndex(c => c.id === id)
+  if (currentIndex === -1 || currentIndex === newIndex) return
+  if (newIndex < 0 || newIndex >= allContexts.length) return
 
-  if (newPosition < oldPosition) {
-    db.prepare(`
-      UPDATE contexts
-      SET sort_position = sort_position + 1
-      WHERE sort_position >= ? AND sort_position < ?
-    `).run(newPosition, oldPosition)
-  } else {
-    db.prepare(`
-      UPDATE contexts
-      SET sort_position = sort_position - 1
-      WHERE sort_position > ? AND sort_position <= ?
-    `).run(oldPosition, newPosition)
-  }
+  // Reorder array in memory
+  const reordered = [...allContexts]
+  const [removed] = reordered.splice(currentIndex, 1)
+  reordered.splice(newIndex, 0, removed)
 
-  db.prepare('UPDATE contexts SET sort_position = ? WHERE id = ?').run(newPosition, id)
+  // Normalize: Assign fresh sortPositions (0, 1, 2, ...)
+  const updateStmt = db.prepare('UPDATE contexts SET sort_position = ? WHERE id = ?')
+  const updateAll = db.transaction(() => {
+    reordered.forEach((c, idx) => updateStmt.run(idx, c.id))
+  })
+  updateAll()
 }
 
 // Task-Context relationship operations
