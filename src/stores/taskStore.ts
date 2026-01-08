@@ -50,7 +50,7 @@ interface TaskStore {
   deleteTasks: (ids: string[]) => Promise<Task[]>
   restoreDeletedTasks: () => Promise<void>
   clearDeletedTasks: () => void
-  reorderTask: (id: string, newPosition: number) => Promise<void>
+  reorderTask: (id: string, newIndex: number) => Promise<void>
   clearUnread: (id: string) => Promise<void>
 
   // Message actions
@@ -85,7 +85,7 @@ interface TaskStore {
   createContext: (input: CreateContextInput) => Promise<Context>
   updateContext: (id: string, input: UpdateContextInput) => Promise<void>
   deleteContext: (id: string) => Promise<void>
-  reorderContext: (id: string, newPosition: number) => Promise<void>
+  reorderContext: (id: string, newIndex: number) => Promise<void>
 
   // Task-Context relationship actions
   loadTaskContexts: (taskId: string) => Promise<void>
@@ -285,15 +285,41 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     set({ deletedTasks: [] })
   },
 
-  reorderTask: async (id, newPosition) => {
+  reorderTask: async (id, newIndex) => {
+    const { tasks } = get()
+
+    // Get today's tasks sorted by sortPosition
+    const todayTasks = tasks
+      .filter(t => t.status === 'today')
+      .sort((a, b) => a.sortPosition - b.sortPosition)
+
+    const currentIndex = todayTasks.findIndex(t => t.id === id)
+    if (currentIndex === -1 || currentIndex === newIndex) return
+
+    // Optimistically reorder in memory
+    const reordered = [...todayTasks]
+    const [removed] = reordered.splice(currentIndex, 1)
+    reordered.splice(newIndex, 0, removed)
+
+    // Update sortPositions to match new order
+    const updatedTodayTasks = reordered.map((task, idx) => ({
+      ...task,
+      sortPosition: idx
+    }))
+
+    // Merge back with other tasks (upcoming, archived)
+    const otherTasks = tasks.filter(t => t.status !== 'today')
+    set({ tasks: [...updatedTodayTasks, ...otherTasks] })
+
     try {
-      await window.api.tasks.reorder(id, newPosition)
-      // Fetch updated tasks without triggering isLoading state change
-      // This prevents unnecessary re-renders that can affect panel layout
-      const tasks = await window.api.tasks.getAll()
-      set({ tasks })
+      await window.api.tasks.reorder(id, newIndex)
+      // Refresh from backend to ensure consistency
+      const freshTasks = await window.api.tasks.getAll()
+      set({ tasks: freshTasks })
     } catch (error) {
-      set({ error: (error as Error).message })
+      // Revert on error - reload from backend
+      const freshTasks = await window.api.tasks.getAll()
+      set({ tasks: freshTasks, error: (error as Error).message })
       throw error
     }
   },
@@ -968,12 +994,35 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     }
   },
 
-  reorderContext: async (id, newPosition) => {
+  reorderContext: async (id, newIndex) => {
+    const { contexts } = get()
+
+    // Get contexts sorted by sortPosition
+    const sortedContexts = [...contexts].sort((a, b) => a.sortPosition - b.sortPosition)
+
+    const currentIndex = sortedContexts.findIndex(c => c.id === id)
+    if (currentIndex === -1 || currentIndex === newIndex) return
+
+    // Optimistically reorder in memory
+    const reordered = [...sortedContexts]
+    const [removed] = reordered.splice(currentIndex, 1)
+    reordered.splice(newIndex, 0, removed)
+
+    // Update sortPositions to match new order
+    const updatedContexts = reordered.map((ctx, idx) => ({
+      ...ctx,
+      sortPosition: idx
+    }))
+
+    set({ contexts: updatedContexts })
+
     try {
-      await window.api.contexts.reorder(id, newPosition)
-      // Reload contexts to get updated sort positions
+      await window.api.contexts.reorder(id, newIndex)
+      // Reload contexts to ensure consistency
       await get().loadContexts()
     } catch (error) {
+      // Revert on error - reload from backend
+      await get().loadContexts()
       set({ error: (error as Error).message })
       throw error
     }
