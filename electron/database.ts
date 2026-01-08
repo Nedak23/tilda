@@ -320,6 +320,31 @@ export function updateTask(id: string, input: UpdateTaskInput): Task {
     values.push(input.sortPosition)
   }
 
+  // Handle recurrence rule updates (null means clear, undefined means no change)
+  if (input.recurrenceRule !== undefined) {
+    if (input.recurrenceRule === null) {
+      // Clear recurrence
+      updates.push('recurrence_frequency = ?')
+      values.push(null)
+      updates.push('recurrence_interval = ?')
+      values.push(null)
+      updates.push('recurrence_end_date = ?')
+      values.push(null)
+      updates.push('recurrence_days_of_week = ?')
+      values.push(null)
+    } else {
+      // Set/update recurrence
+      updates.push('recurrence_frequency = ?')
+      values.push(input.recurrenceRule.frequency)
+      updates.push('recurrence_interval = ?')
+      values.push(input.recurrenceRule.interval)
+      updates.push('recurrence_end_date = ?')
+      values.push(input.recurrenceRule.endDate || null)
+      updates.push('recurrence_days_of_week = ?')
+      values.push(input.recurrenceRule.daysOfWeek ? JSON.stringify(input.recurrenceRule.daysOfWeek) : null)
+    }
+  }
+
   if (updates.length > 0) {
     values.push(id)
     db.prepare(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`).run(...values)

@@ -6,7 +6,7 @@ import { CalendarPicker } from './CalendarPicker'
 import { isFileSupported, FILE_INPUT_ACCEPT } from '../utils/fileUtils'
 import { logger } from '../utils/logger'
 import { GENERAL_CONTEXT_ID } from '../types'
-import type { Task } from '../types'
+import type { Task, RecurrenceRule } from '../types'
 
 interface InlineTaskEditProps {
   task?: Task
@@ -52,6 +52,7 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
   const [localDate, setLocalDate] = useState(task?.dateToWorkOn || defaultDate || today)
   const [localDeadline, setLocalDeadline] = useState(task?.deadline || '')
   const [localContextIds, setLocalContextIds] = useState<string[]>(defaultContextId ? [defaultContextId] : [])
+  const [localRecurrenceRule, setLocalRecurrenceRule] = useState<RecurrenceRule | undefined>(task?.recurrenceRule)
   const [chatInput, setChatInput] = useState('')
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [showDeadlinePicker, setShowDeadlinePicker] = useState(false)
@@ -182,7 +183,8 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
         name: editedName.trim(),
         dateToWorkOn: localDate,
         deadline: localDeadline || undefined,
-        description: editedDescription.trim() || undefined
+        description: editedDescription.trim() || undefined,
+        recurrenceRule: localRecurrenceRule
       })
       if (newTask && localContextIds.length > 0) {
         await setTaskContexts(newTask.id, localContextIds)
@@ -281,6 +283,19 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
     setShowDeadlinePicker(false)
   }
 
+  const handleRecurrenceChange = async (rule: RecurrenceRule | null) => {
+    const previousRule = localRecurrenceRule
+    setLocalRecurrenceRule(rule || undefined)
+    if (activeTask) {
+      try {
+        await updateTask(activeTask.id, { recurrenceRule: rule })
+      } catch (error) {
+        logger.error('Failed to update recurrence rule:', error)
+        setLocalRecurrenceRule(previousRule)
+      }
+    }
+  }
+
   const handleToggleContext = async (contextId: string) => {
     if (activeTask) {
       const newContexts = taskContexts.includes(contextId)
@@ -340,6 +355,7 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
 
   const currentDate = activeTask?.dateToWorkOn || localDate
   const currentDeadline = activeTask?.deadline || localDeadline
+  const currentRecurrenceRule = activeTask?.recurrenceRule || localRecurrenceRule
   const isToday = currentDate === today
 
   const filteredContexts = contexts.filter(c => c.id !== GENERAL_CONTEXT_ID)
@@ -452,6 +468,9 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
                   <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                 </svg>
                 <span>{isToday ? 'Today' : format(parseISO(currentDate), 'MMM d')}</span>
+                {currentRecurrenceRule && (
+                  <span className="text-accent-blue" title="Repeating task">↻</span>
+                )}
               </button>
               {showDatePicker && (
                 <div className="absolute top-full left-0 mt-2 z-20">
@@ -460,6 +479,8 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
                     onDateChange={handleDateChange}
                     onClose={() => setShowDatePicker(false)}
                     showQuickOptions={true}
+                    recurrenceRule={currentRecurrenceRule}
+                    onRecurrenceChange={handleRecurrenceChange}
                   />
                 </div>
               )}
