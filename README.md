@@ -19,8 +19,6 @@ Download the latest release from the [Releases](https://github.com/Nedak23/tilda
 2. Open the DMG and drag Tilda to Applications
 3. Launch Tilda from Applications
 
-**Note:** Since this app is not code-signed, you may need to right-click and select "Open" on first launch to bypass Gatekeeper.
-
 ## Setup
 
 1. Open Tilda
