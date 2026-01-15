@@ -5,6 +5,7 @@ import { TaskList } from './components/TaskList'
 import { TaskChat } from './components/TaskChat'
 import { InlineTaskEdit } from './components/InlineTaskEdit'
 import { SettingsModal } from './components/SettingsModal'
+import { FeedbackModal } from './components/FeedbackModal'
 import { TildaSidebar } from './components/TildaSidebar'
 import { ContextDetailView, ContextDetailViewRef } from './components/ContextDetailView'
 import { PanelLayout } from './components/PanelLayout'
@@ -48,6 +49,7 @@ function App() {
 
   const [isCreatingTask, setIsCreatingTask] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
   const [notification, setNotification] = useState<{ message: string; contextId: string } | null>(null)
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
   const [showDatePicker, setShowDatePicker] = useState(false)
@@ -486,6 +488,7 @@ function App() {
         onToggleTilda={toggleTilda}
         onToggleNav={toggleNav}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenFeedback={() => setIsFeedbackOpen(true)}
       />
 
       {/* Main layout with resizable panels */}
@@ -512,6 +515,11 @@ function App() {
       {/* Settings Modal */}
       {isSettingsOpen && (
         <SettingsModal onClose={() => setIsSettingsOpen(false)} />
+      )}
+
+      {/* Feedback Modal */}
+      {isFeedbackOpen && (
+        <FeedbackModal onClose={() => setIsFeedbackOpen(false)} />
       )}
 
       {/* AI Note Saved Notification */}

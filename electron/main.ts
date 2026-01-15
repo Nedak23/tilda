@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { Resend } from 'resend'
 import { logger, isDev } from './logger'
 import { initAutoUpdater } from './auto-updater'
 
@@ -58,7 +59,24 @@ import { completeTaskWithLearning } from './learning-check'
 import { sendMessage, cancelRequest, regenerateResponse } from './llm'
 import { sendTildaMessage, cancelTildaRequest, regenerateTildaResponse } from './tilda'
 import { getSettings, saveSettings, type Settings } from './settings'
-import type { CreateTaskInput, UpdateTaskInput, MessageSender, CreateContextInput, UpdateContextInput, CreateAILearningNoteInput, UpdateAILearningNoteInput } from '../src/types'
+import type { CreateTaskInput, UpdateTaskInput, MessageSender, CreateContextInput, UpdateContextInput, CreateAILearningNoteInput, UpdateAILearningNoteInput, FeedbackInput } from '../src/types'
+
+// Initialize Resend for feedback emails (API key from environment variable)
+const resend = new Resend(process.env.RESEND_API_KEY || '')
+
+// Rate limiting for feedback
+let lastFeedbackTime = 0
+const FEEDBACK_COOLDOWN_MS = 60000 // 1 minute
+
+// HTML escaping helper to prevent injection
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
 
 let mainWindow: BrowserWindow | null = null
 
@@ -377,6 +395,55 @@ ipcMain.handle('aiNotes:update', (_event, id: string, input: UpdateAILearningNot
 
 ipcMain.handle('aiNotes:delete', (_event, id: string) => {
   deleteAILearningNote(id)
+})
+
+// IPC Handler for Feedback
+ipcMain.handle('feedback:send', async (_event, input: FeedbackInput) => {
+  // Check if API key is configured
+  if (!process.env.RESEND_API_KEY) {
+    logger.error('RESEND_API_KEY environment variable is not set')
+    return { success: false, error: 'Feedback service is not configured' }
+  }
+
+  // Rate limiting check
+  const now = Date.now()
+  if (now - lastFeedbackTime < FEEDBACK_COOLDOWN_MS) {
+    const remainingSeconds = Math.ceil((FEEDBACK_COOLDOWN_MS - (now - lastFeedbackTime)) / 1000)
+    return { success: false, error: `Please wait ${remainingSeconds} seconds before sending more feedback` }
+  }
+
+  try {
+    const escapedMessage = escapeHtml(input.message)
+    const escapedEmail = input.email ? escapeHtml(input.email) : null
+
+    const { data, error } = await resend.emails.send({
+      from: 'Tilda Feedback <onboarding@resend.dev>',
+      to: ['kadenhyatt@gmail.com'],
+      subject: 'Tilda Feedback',
+      text: `Feedback from user:\n\n${input.message}${input.email ? `\n\nUser email: ${input.email}` : ''}`,
+      html: `
+        <h2>Tilda Feedback</h2>
+        <p><strong>Message:</strong></p>
+        <p>${escapedMessage.replace(/\n/g, '<br>')}</p>
+        ${escapedEmail ? `<p><strong>User email:</strong> ${escapedEmail}</p>` : ''}
+      `
+    })
+
+    if (error) {
+      logger.error('Failed to send feedback email:', error)
+      return { success: false, error: error.message }
+    }
+
+    lastFeedbackTime = now
+    logger.log('Feedback sent successfully:', data)
+    return { success: true }
+  } catch (error) {
+    logger.error('Failed to send feedback:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to send feedback'
+    }
+  }
 })
 
 // App lifecycle
