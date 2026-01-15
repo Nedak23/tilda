@@ -16,6 +16,9 @@ export default defineConfig({
             rollupOptions: {
               external: ['better-sqlite3', 'electron-updater']
             }
+          },
+          define: {
+            'process.env.RESEND_API_KEY': JSON.stringify(process.env.RESEND_API_KEY || '')
           }
         }
       },
