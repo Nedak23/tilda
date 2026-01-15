@@ -66,7 +66,3 @@ Tilda stores all data locally on your machine:
 - No telemetry or analytics
 
 Your API key is stored locally and only used for Claude API calls.
-
-## License
-
-MIT License - see [LICENSE](LICENSE)
