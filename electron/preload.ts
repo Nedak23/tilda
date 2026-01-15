@@ -9,7 +9,8 @@ import type {
   UpdateContextInput,
   CreateAILearningNoteInput,
   UpdateAILearningNoteInput,
-  AILearningNote
+  AILearningNote,
+  FeedbackInput
 } from '../src/types'
 
 const api: ElectronAPI = {
@@ -166,6 +167,9 @@ const api: ElectronAPI = {
       ipcRenderer.on('update:ready', listener)
       return () => ipcRenderer.removeListener('update:ready', listener)
     }
+  },
+  feedback: {
+    send: (input: FeedbackInput) => ipcRenderer.invoke('feedback:send', input)
   }
 }
 

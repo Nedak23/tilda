@@ -263,6 +263,16 @@ export interface UpdaterAPI {
   onUpdateReady: (callback: () => void) => () => void
 }
 
+// Feedback types
+export interface FeedbackInput {
+  message: string
+  email?: string
+}
+
+export interface FeedbackAPI {
+  send: (input: FeedbackInput) => Promise<{ success: boolean; error?: string }>
+}
+
 export interface ElectronAPI {
   tasks: TasksAPI
   messages: MessagesAPI
@@ -275,6 +285,7 @@ export interface ElectronAPI {
   contextDocuments: ContextDocumentsAPI
   aiNotes: AINotesAPI
   updater: UpdaterAPI
+  feedback: FeedbackAPI
 }
 
 declare global {
