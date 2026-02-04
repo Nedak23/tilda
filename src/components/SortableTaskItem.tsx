@@ -11,7 +11,7 @@ interface SortableTaskItemProps {
   isSelected?: boolean
   showCompletionDate?: boolean
   showDate?: boolean
-  contexts?: Context[]
+  context?: Context | null
   isEditing?: boolean
   onStartEdit?: () => void
   onCloseEdit?: () => void
@@ -27,7 +27,7 @@ export function SortableTaskItem({
   isSelected,
   showCompletionDate,
   showDate,
-  contexts,
+  context,
   isEditing,
   onStartEdit,
   onCloseEdit,
@@ -82,7 +82,7 @@ export function SortableTaskItem({
         isSelected={isSelected}
         showCompletionDate={showCompletionDate}
         showDate={showDate}
-        contexts={contexts}
+        context={context}
         isEditing={isEditing}
         onStartEdit={onStartEdit}
         onCloseEdit={onCloseEdit}

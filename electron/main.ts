@@ -43,8 +43,8 @@ import {
   updateContext,
   deleteContext,
   reorderContext,
-  getContextsByTask,
-  setTaskContexts,
+  getContextForTask,
+  setTaskContext,
   getTasksByContext,
   getDocumentsByContext,
   createContextDocument,
@@ -56,13 +56,22 @@ import {
   deleteAILearningNote
 } from './database'
 import { completeTaskWithLearning } from './learning-check'
-import { sendMessage, cancelRequest, regenerateResponse } from './llm'
+import { sendMessage, cancelRequest, regenerateResponse, getProcessStatus } from './llm'
+import { extractAndCleanup, cleanupOrphanedFolders } from './claude-code'
 import { sendTildaMessage, cancelTildaRequest, regenerateTildaResponse } from './tilda'
 import { getSettings, saveSettings, type Settings } from './settings'
 import type { CreateTaskInput, UpdateTaskInput, MessageSender, CreateContextInput, UpdateContextInput, CreateAILearningNoteInput, UpdateAILearningNoteInput, FeedbackInput } from '../src/types'
 
-// Initialize Resend for feedback emails (API key from environment variable)
-const resend = new Resend(process.env.RESEND_API_KEY || '')
+// Lazy-initialized Resend client (only created when needed in production)
+let resend: Resend | null = null
+function getResendClient(): Resend | null {
+  if (isDev) return null
+  if (!process.env.RESEND_API_KEY) return null
+  if (!resend) {
+    resend = new Resend(process.env.RESEND_API_KEY)
+  }
+  return resend
+}
 
 // Rate limiting for feedback
 let lastFeedbackTime = 0
@@ -137,6 +146,9 @@ ipcMain.handle('tasks:complete', async (_event, id: string) => {
       }
     })
     .catch(err => logger.error('Learning check error:', err))
+
+  // Extract useful content and cleanup working folder asynchronously
+  extractAndCleanup(id).catch(err => logger.error('Extract and cleanup error:', err))
 
   return task
 })
@@ -351,12 +363,12 @@ ipcMain.handle('contexts:reorder', (_event, id: string, newPosition: number) => 
   reorderContext(id, newPosition)
 })
 
-ipcMain.handle('contexts:getTaskContexts', (_event, taskId: string) => {
-  return getContextsByTask(taskId)
+ipcMain.handle('contexts:getTaskContext', (_event, taskId: string) => {
+  return getContextForTask(taskId)
 })
 
-ipcMain.handle('contexts:setTaskContexts', (_event, taskId: string, contextIds: string[]) => {
-  setTaskContexts(taskId, contextIds)
+ipcMain.handle('contexts:setTaskContext', (_event, taskId: string, contextId: string | null) => {
+  setTaskContext(taskId, contextId)
 })
 
 ipcMain.handle('contexts:getTasksByContext', (_event, contextId: string) => {
@@ -397,10 +409,22 @@ ipcMain.handle('aiNotes:delete', (_event, id: string) => {
   deleteAILearningNote(id)
 })
 
+// IPC Handler for LLM process status
+ipcMain.handle('llm:getProcessStatus', (_event, taskId: string) => {
+  return getProcessStatus(taskId)
+})
+
 // IPC Handler for Feedback
 ipcMain.handle('feedback:send', async (_event, input: FeedbackInput) => {
-  // Check if API key is configured
-  if (!process.env.RESEND_API_KEY) {
+  // Disable feedback in development builds
+  if (isDev) {
+    logger.log('Feedback disabled in development mode')
+    return { success: false, error: 'Feedback is disabled in development mode' }
+  }
+
+  // Get Resend client (returns null if not configured)
+  const resendClient = getResendClient()
+  if (!resendClient) {
     logger.error('RESEND_API_KEY environment variable is not set')
     return { success: false, error: 'Feedback service is not configured' }
   }
@@ -416,7 +440,7 @@ ipcMain.handle('feedback:send', async (_event, input: FeedbackInput) => {
     const escapedMessage = escapeHtml(input.message)
     const escapedEmail = input.email ? escapeHtml(input.email) : null
 
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await resendClient.emails.send({
       from: 'Tilda Feedback <onboarding@resend.dev>',
       to: ['kadenhyatt@gmail.com'],
       subject: 'Tilda Feedback',
@@ -450,6 +474,10 @@ ipcMain.handle('feedback:send', async (_event, input: FeedbackInput) => {
 app.whenReady().then(() => {
   initDatabase()
   migrateTasksToToday()
+
+  // Clean up orphaned working folders on startup
+  cleanupOrphanedFolders().catch(err => logger.error('Failed to cleanup orphaned folders:', err))
+
   createWindow()
 
   // Initialize auto-updater in production mode only

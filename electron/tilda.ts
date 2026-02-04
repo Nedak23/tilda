@@ -12,8 +12,8 @@ import {
   searchTasks,
   getAllContexts,
   createContext,
-  setTaskContexts,
-  getContextsByTask,
+  setTaskContext,
+  getContextById,
   createAILearningNote,
   GENERAL_CONTEXT_ID,
   type SearchTasksCriteria
@@ -114,10 +114,9 @@ const TILDA_TOOLS: Anthropic.Tool[] = [
           },
           required: ['frequency', 'interval']
         },
-        contextIds: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Optional array of context IDs to assign this task to. Use list_contexts to get available context IDs.'
+        contextId: {
+          type: 'string',
+          description: 'Optional context ID to assign this task to. Use list_contexts to get available context IDs.'
         }
       },
       required: ['name']
@@ -149,10 +148,9 @@ const TILDA_TOOLS: Anthropic.Tool[] = [
           type: 'string',
           description: 'New description for the task'
         },
-        contextIds: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'New array of context IDs for this task (replaces existing contexts). Use list_contexts to get available context IDs.'
+        contextId: {
+          type: 'string',
+          description: 'New context ID for this task (replaces existing context). Use list_contexts to get available context IDs. Use null to clear context.'
         }
       },
       required: ['taskId']
@@ -299,8 +297,7 @@ interface ToolInput {
   searchQuery?: string
   dateFrom?: string
   dateTo?: string
-  contextIds?: string[]
-  contextId?: string
+  contextId?: string | null
   // For save_learning_note
   title?: string
   content?: string
@@ -316,23 +313,20 @@ function executeToolCall(toolName: string, toolInput: ToolInput): string {
           dateToWorkOn: toolInput.dateToWorkOn || getTodayDateString(),
           deadline: toolInput.deadline,
           description: toolInput.description,
-          recurrenceRule: toolInput.recurrence
+          recurrenceRule: toolInput.recurrence,
+          contextId: toolInput.contextId || undefined
         }
         const task = createTask(input)
-        // Assign contexts if provided
-        if (toolInput.contextIds && toolInput.contextIds.length > 0) {
-          setTaskContexts(task.id, toolInput.contextIds)
-        }
-        const taskContexts = getContextsByTask(task.id)
+        const taskContext = task.contextId ? getContextById(task.contextId) : null
         return JSON.stringify({
           success: true,
-          message: `Created task "${task.name}" for ${task.dateToWorkOn}${taskContexts.length > 0 ? ` in contexts: ${taskContexts.map(c => c.name).join(', ')}` : ''}`,
+          message: `Created task "${task.name}" for ${task.dateToWorkOn}${taskContext ? ` in context: ${taskContext.name}` : ''}`,
           task: {
             id: task.id,
             name: task.name,
             dateToWorkOn: task.dateToWorkOn,
             status: task.status,
-            contexts: taskContexts.map(c => ({ id: c.id, name: c.name }))
+            context: taskContext ? { id: taskContext.id, name: taskContext.name } : null
           }
         })
       }
@@ -345,20 +339,23 @@ function executeToolCall(toolName: string, toolInput: ToolInput): string {
         if (toolInput.description) input.description = toolInput.description
 
         const task = updateTask(toolInput.taskId!, input)
-        // Update contexts if provided
-        if (toolInput.contextIds) {
-          setTaskContexts(task.id, toolInput.contextIds)
+        // Update context if provided
+        if (toolInput.contextId !== undefined) {
+          setTaskContext(task.id, toolInput.contextId)
         }
-        const taskContexts = getContextsByTask(task.id)
+        const updatedTask = toolInput.contextId !== undefined
+          ? { ...task, contextId: toolInput.contextId || undefined }
+          : task
+        const taskContext = updatedTask.contextId ? getContextById(updatedTask.contextId) : null
         return JSON.stringify({
           success: true,
-          message: `Updated task "${task.name}"${toolInput.contextIds ? ` (contexts: ${taskContexts.length > 0 ? taskContexts.map(c => c.name).join(', ') : 'none'})` : ''}`,
+          message: `Updated task "${task.name}"${toolInput.contextId !== undefined ? ` (context: ${taskContext ? taskContext.name : 'none'})` : ''}`,
           task: {
             id: task.id,
             name: task.name,
             dateToWorkOn: task.dateToWorkOn,
             status: task.status,
-            contexts: taskContexts.map(c => ({ id: c.id, name: c.name }))
+            context: taskContext ? { id: taskContext.id, name: taskContext.name } : null
           }
         })
       }
@@ -428,7 +425,7 @@ function executeToolCall(toolName: string, toolInput: ToolInput): string {
           success: true,
           count: tasks.length,
           tasks: tasks.map(t => {
-            const taskContexts = getContextsByTask(t.id)
+            const taskContext = t.contextId ? getContextById(t.contextId) : null
             return {
               id: t.id,
               name: t.name,
@@ -436,7 +433,7 @@ function executeToolCall(toolName: string, toolInput: ToolInput): string {
               deadline: t.deadline,
               status: t.status,
               description: t.description,
-              contexts: taskContexts.map(c => ({ id: c.id, name: c.name }))
+              context: taskContext ? { id: taskContext.id, name: taskContext.name } : null
             }
           })
         })

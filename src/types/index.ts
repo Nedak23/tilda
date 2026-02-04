@@ -10,6 +10,7 @@ export type AILearningNoteCategory = 'preference' | 'domain_knowledge' | 'workfl
 export interface Settings {
   apiKey: string
   model: ModelType
+  tildaDirectory?: string
 }
 
 export interface RecurrenceRule {
@@ -31,6 +32,8 @@ export interface Task {
   hasUnreadAgentMessage: boolean
   recurrenceRule?: RecurrenceRule
   createdAt: string
+  contextId?: string
+  claudeSessionId?: string
 }
 
 export interface Message {
@@ -58,7 +61,7 @@ export interface CreateTaskInput {
   deadline?: string
   description?: string
   recurrenceRule?: RecurrenceRule
-  contextIds?: string[]
+  contextId?: string
 }
 
 export interface UpdateTaskInput {
@@ -67,7 +70,7 @@ export interface UpdateTaskInput {
   deadline?: string
   description?: string
   sortPosition?: number
-  contextIds?: string[]
+  contextId?: string | null
   recurrenceRule?: RecurrenceRule | null
 }
 
@@ -192,8 +195,8 @@ export interface ContextsAPI {
   update: (id: string, input: UpdateContextInput) => Promise<Context>
   delete: (id: string) => Promise<void>
   reorder: (id: string, newPosition: number) => Promise<void>
-  getTaskContexts: (taskId: string) => Promise<Context[]>
-  setTaskContexts: (taskId: string, contextIds: string[]) => Promise<void>
+  getTaskContext: (taskId: string) => Promise<Context | null>
+  setTaskContext: (taskId: string, contextId: string | null) => Promise<void>
   getTasksByContext: (contextId: string) => Promise<Task[]>
 }
 

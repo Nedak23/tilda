@@ -26,14 +26,12 @@ export const ContextDetailView = forwardRef<ContextDetailViewRef, ContextDetailV
   const {
     contexts,
     tasks,
-    taskContextsByTask,
     contextDocumentsByContext,
     aiNotesByContext,
     updateContext,
     loadContextDocuments,
     addContextDocument,
     removeContextDocument,
-    loadTaskContexts,
     loadAINotes,
     updateAINote,
     deleteAINote
@@ -61,20 +59,10 @@ export const ContextDetailView = forwardRef<ContextDetailViewRef, ContextDetailV
     loadAINotes(contextId)
   }, [contextId, loadContextDocuments, loadAINotes])
 
-  // Load task contexts for all tasks in this context
-  useEffect(() => {
-    tasks.forEach(task => {
-      if (!taskContextsByTask[task.id]) {
-        loadTaskContexts(task.id)
-      }
-    })
-  }, [tasks, taskContextsByTask, loadTaskContexts])
-
   // Get tasks that belong to this context (excluding archived)
   const contextTasks = tasks.filter(task => {
     if (task.status === 'archived') return false
-    const contexts = taskContextsByTask[task.id] || []
-    return contexts.includes(contextId)
+    return task.contextId === contextId
   }).sort((a, b) => {
     // Sort by date, then by sort position
     const dateCompare = a.dateToWorkOn.localeCompare(b.dateToWorkOn)

@@ -107,17 +107,6 @@ export function initDatabase(): void {
 
     CREATE INDEX IF NOT EXISTS idx_contexts_sort ON contexts(sort_position);
 
-    CREATE TABLE IF NOT EXISTS task_contexts (
-      task_id TEXT NOT NULL,
-      context_id TEXT NOT NULL,
-      PRIMARY KEY (task_id, context_id),
-      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-      FOREIGN KEY (context_id) REFERENCES contexts(id) ON DELETE CASCADE
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_task_contexts_task ON task_contexts(task_id);
-    CREATE INDEX IF NOT EXISTS idx_task_contexts_context ON task_contexts(context_id);
-
     CREATE TABLE IF NOT EXISTS context_documents (
       id TEXT PRIMARY KEY,
       context_id TEXT NOT NULL,
@@ -157,10 +146,52 @@ export function initDatabase(): void {
 
 function runMigrations(): void {
   // Add attachment_ids column to tilda_messages if it doesn't exist
-  const columns = db.prepare('PRAGMA table_info(tilda_messages)').all() as { name: string }[]
-  const hasAttachmentIds = columns.some(col => col.name === 'attachment_ids')
+  const tildaColumns = db.prepare('PRAGMA table_info(tilda_messages)').all() as { name: string }[]
+  const hasAttachmentIds = tildaColumns.some(col => col.name === 'attachment_ids')
   if (!hasAttachmentIds) {
     db.exec('ALTER TABLE tilda_messages ADD COLUMN attachment_ids TEXT')
+  }
+
+  // Migration: Add context_id column to tasks table (single context per task)
+  const taskColumns = db.prepare('PRAGMA table_info(tasks)').all() as { name: string }[]
+  const hasContextId = taskColumns.some(col => col.name === 'context_id')
+  if (!hasContextId) {
+    // Add the new column
+    db.exec('ALTER TABLE tasks ADD COLUMN context_id TEXT REFERENCES contexts(id) ON DELETE SET NULL')
+
+    // Check if task_contexts table exists before trying to migrate from it
+    const tableExists = db.prepare(`
+      SELECT name FROM sqlite_master WHERE type='table' AND name='task_contexts'
+    `).get()
+
+    if (tableExists) {
+      // Migrate existing data from task_contexts junction table
+      // Pick first non-General context for each task
+      const tasksWithContexts = db.prepare(`
+        SELECT tc.task_id, tc.context_id
+        FROM task_contexts tc
+        WHERE tc.context_id != ?
+        GROUP BY tc.task_id
+      `).all(GENERAL_CONTEXT_ID) as { task_id: string; context_id: string }[]
+
+      const updateStmt = db.prepare('UPDATE tasks SET context_id = ? WHERE id = ?')
+      for (const row of tasksWithContexts) {
+        updateStmt.run(row.context_id, row.task_id)
+      }
+
+      // Drop the task_contexts table since we no longer need it
+      db.exec('DROP TABLE IF EXISTS task_contexts')
+    }
+  }
+
+  // Create index for context_id (separate from column creation for existing DBs)
+  db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_context ON tasks(context_id)')
+
+  // Migration: Add claude_session_id column to tasks table
+  const taskColumnsForSession = db.prepare('PRAGMA table_info(tasks)').all() as { name: string }[]
+  const hasClaudeSessionId = taskColumnsForSession.some(col => col.name === 'claude_session_id')
+  if (!hasClaudeSessionId) {
+    db.exec('ALTER TABLE tasks ADD COLUMN claude_session_id TEXT')
   }
 }
 
@@ -213,7 +244,9 @@ function rowToTask(row: Record<string, unknown>): Task {
     sortPosition: row.sort_position as number,
     hasUnreadAgentMessage: Boolean(row.has_unread_agent_message),
     recurrenceRule,
-    createdAt: row.created_at as string
+    createdAt: row.created_at as string,
+    contextId: row.context_id as string | undefined,
+    claudeSessionId: row.claude_session_id as string | undefined
   }
 }
 
@@ -263,8 +296,8 @@ export function createTask(input: CreateTaskInput): Task {
       id, name, date_to_work_on, deadline, description, status,
       sort_position, has_unread_agent_message,
       recurrence_frequency, recurrence_interval, recurrence_end_date, recurrence_days_of_week,
-      created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
+      created_at, context_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     input.name,
@@ -277,7 +310,8 @@ export function createTask(input: CreateTaskInput): Task {
     input.recurrenceRule?.interval ?? null,
     input.recurrenceRule?.endDate ?? null,
     input.recurrenceRule?.daysOfWeek ? JSON.stringify(input.recurrenceRule.daysOfWeek) : null,
-    now
+    now,
+    input.contextId ?? null
   )
 
   return getTaskById(id)!
@@ -419,25 +453,18 @@ function createNextRecurrence(completedTask: Task): void {
   // Copy attachments from original task
   const attachments = getAttachmentsByTask(completedTask.id)
 
-  // Copy context assignments from original task
-  const contexts = getContextsByTask(completedTask.id)
-
   const newTask = createTask({
     name: completedTask.name,
     dateToWorkOn: nextDate,
     deadline: completedTask.deadline,
     description: completedTask.description,
-    recurrenceRule: completedTask.recurrenceRule
+    recurrenceRule: completedTask.recurrenceRule,
+    contextId: completedTask.contextId
   })
 
   // Copy attachments to new task
   for (const attachment of attachments) {
     createAttachment(newTask.id, attachment.filename, attachment.content, attachment.mimeType)
-  }
-
-  // Copy context assignments to new task
-  if (contexts.length > 0) {
-    setTaskContexts(newTask.id, contexts.map(c => c.id))
   }
 }
 
@@ -770,43 +797,38 @@ export interface SearchTasksCriteria {
 }
 
 export function searchTasks(criteria: SearchTasksCriteria): Task[] {
-  let query = 'SELECT DISTINCT t.* FROM tasks t'
+  let query = 'SELECT * FROM tasks'
   const params: unknown[] = []
-
-  // Join with task_contexts if filtering by context
-  if (criteria.contextId) {
-    query += ' INNER JOIN task_contexts tc ON t.id = tc.task_id'
-  }
 
   query += ' WHERE 1=1'
 
   if (criteria.contextId) {
-    query += ' AND tc.context_id = ?'
+    query += ' AND context_id = ?'
     params.push(criteria.contextId)
   }
 
   if (criteria.status && criteria.status !== 'all') {
-    query += ' AND t.status = ?'
+    query += ' AND status = ?'
     params.push(criteria.status)
   }
 
   if (criteria.searchQuery) {
-    query += ' AND (t.name LIKE ? OR t.description LIKE ?)'
+    query += ' AND (name LIKE ? OR description LIKE ?)'
     const searchPattern = `%${criteria.searchQuery}%`
     params.push(searchPattern, searchPattern)
   }
 
   if (criteria.dateFrom) {
-    query += ' AND t.date_to_work_on >= ?'
+    query += ' AND date_to_work_on >= ?'
     params.push(criteria.dateFrom)
   }
 
   if (criteria.dateTo) {
-    query += ' AND t.date_to_work_on <= ?'
+    query += ' AND date_to_work_on <= ?'
     params.push(criteria.dateTo)
   }
 
-  query += ' ORDER BY t.sort_position ASC'
+  query += ' ORDER BY sort_position ASC'
 
   const rows = db.prepare(query).all(...params)
   return rows.map(row => rowToTask(row as Record<string, unknown>))
@@ -910,46 +932,27 @@ export function reorderContext(id: string, newIndex: number): void {
 
 // Task-Context relationship operations
 
-export function getContextsByTask(taskId: string): Context[] {
-  const rows = db.prepare(`
-    SELECT c.* FROM contexts c
-    INNER JOIN task_contexts tc ON c.id = tc.context_id
-    WHERE tc.task_id = ?
-    ORDER BY c.sort_position ASC
-  `).all(taskId)
-  return rows.map(row => rowToContext(row as Record<string, unknown>))
+export function getContextForTask(taskId: string): Context | null {
+  const task = getTaskById(taskId)
+  if (!task || !task.contextId) return null
+  return getContextById(task.contextId) || null
 }
 
 export function getTasksByContext(contextId: string): Task[] {
   const rows = db.prepare(`
-    SELECT t.* FROM tasks t
-    INNER JOIN task_contexts tc ON t.id = tc.task_id
-    WHERE tc.context_id = ?
-    ORDER BY t.sort_position ASC
+    SELECT * FROM tasks
+    WHERE context_id = ?
+    ORDER BY sort_position ASC
   `).all(contextId)
   return rows.map(row => rowToTask(row as Record<string, unknown>))
 }
 
-export function addTaskToContext(taskId: string, contextId: string): void {
-  db.prepare(`
-    INSERT OR IGNORE INTO task_contexts (task_id, context_id)
-    VALUES (?, ?)
-  `).run(taskId, contextId)
+export function setTaskContext(taskId: string, contextId: string | null): void {
+  db.prepare('UPDATE tasks SET context_id = ? WHERE id = ?').run(contextId, taskId)
 }
 
-export function removeTaskFromContext(taskId: string, contextId: string): void {
-  db.prepare('DELETE FROM task_contexts WHERE task_id = ? AND context_id = ?').run(taskId, contextId)
-}
-
-export function setTaskContexts(taskId: string, contextIds: string[]): void {
-  // Remove all existing associations
-  db.prepare('DELETE FROM task_contexts WHERE task_id = ?').run(taskId)
-
-  // Add new associations
-  const insert = db.prepare('INSERT INTO task_contexts (task_id, context_id) VALUES (?, ?)')
-  for (const contextId of contextIds) {
-    insert.run(taskId, contextId)
-  }
+export function setTaskClaudeSessionId(taskId: string, sessionId: string | null): void {
+  db.prepare('UPDATE tasks SET claude_session_id = ? WHERE id = ?').run(sessionId, taskId)
 }
 
 // Context document operations

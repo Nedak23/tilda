@@ -31,7 +31,6 @@ interface TaskStore {
   // Context state
   contexts: Context[]
   contextDocumentsByContext: Record<string, ContextDocument[]>
-  taskContextsByTask: Record<string, string[]>
 
   // AI Learning Notes state
   aiNotesByContext: Record<string, AILearningNote[]>
@@ -88,8 +87,7 @@ interface TaskStore {
   reorderContext: (id: string, newIndex: number) => Promise<void>
 
   // Task-Context relationship actions
-  loadTaskContexts: (taskId: string) => Promise<void>
-  setTaskContexts: (taskId: string, contextIds: string[]) => Promise<void>
+  setTaskContext: (taskId: string, contextId: string | null) => Promise<void>
 
   // Context document actions
   loadContextDocuments: (contextId: string) => Promise<void>
@@ -97,7 +95,7 @@ interface TaskStore {
   removeContextDocument: (id: string, contextId: string) => Promise<void>
 
   // Context helpers
-  getContextsForTask: (taskId: string) => Context[]
+  getContextForTask: (taskId: string) => Context | undefined
   getContextById: (id: string) => Context | undefined
 
   // AI Learning Notes actions
@@ -124,7 +122,6 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   tildaStreamingContent: '',
   contexts: [],
   contextDocumentsByContext: {},
-  taskContextsByTask: {},
   aiNotesByContext: {},
 
   // View actions
@@ -1029,22 +1026,14 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   },
 
   // Task-Context relationship actions
-  loadTaskContexts: async (taskId) => {
+  setTaskContext: async (taskId, contextId) => {
     try {
-      const contexts = await window.api.contexts.getTaskContexts(taskId)
+      await window.api.contexts.setTaskContext(taskId, contextId)
+      // Update the task's contextId in local state
       set(state => ({
-        taskContextsByTask: { ...state.taskContextsByTask, [taskId]: contexts.map(c => c.id) }
-      }))
-    } catch (error) {
-      set({ error: (error as Error).message })
-    }
-  },
-
-  setTaskContexts: async (taskId, contextIds) => {
-    try {
-      await window.api.contexts.setTaskContexts(taskId, contextIds)
-      set(state => ({
-        taskContextsByTask: { ...state.taskContextsByTask, [taskId]: contextIds }
+        tasks: state.tasks.map(t =>
+          t.id === taskId ? { ...t, contextId: contextId || undefined } : t
+        )
       }))
     } catch (error) {
       set({ error: (error as Error).message })
@@ -1102,9 +1091,10 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   },
 
   // Context helpers
-  getContextsForTask: (taskId) => {
-    const contextIds = get().taskContextsByTask[taskId] || []
-    return get().contexts.filter(c => contextIds.includes(c.id))
+  getContextForTask: (taskId) => {
+    const task = get().tasks.find(t => t.id === taskId)
+    if (!task?.contextId) return undefined
+    return get().contexts.find(c => c.id === task.contextId)
   },
 
   getContextById: (id) => {

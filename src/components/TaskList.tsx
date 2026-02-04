@@ -95,13 +95,14 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
     reopenTask,
     reorderTask,
     contexts,
-    taskContextsByTask
+    tasks
   } = useTaskStore()
 
-  // Helper to get contexts for a task
-  const getTaskContexts = (taskId: string) => {
-    const contextIds = taskContextsByTask[taskId] || []
-    return contexts.filter(c => contextIds.includes(c.id))
+  // Helper to get context for a task
+  const getTaskContext = (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId)
+    if (!task?.contextId) return null
+    return contexts.find(c => c.id === task.contextId) || null
   }
 
   const todayTasks = getTodayTasks()
@@ -181,7 +182,7 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
                 onClick={(e) => onTaskClick(task.id, e)}
                 onComplete={() => handleTaskAction(task)}
                 isSelected={selectedTaskIds.has(task.id)}
-                contexts={getTaskContexts(task.id)}
+                context={getTaskContext(task.id)}
                 isEditing={editingTaskId === task.id}
                 onStartEdit={() => onEditingTaskIdChange(task.id)}
                 onCloseEdit={() => onEditingTaskIdChange(null)}
@@ -230,7 +231,7 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
                   onClick={(e) => onTaskClick(task.id, e)}
                   onComplete={() => handleTaskAction(task)}
                   isSelected={selectedTaskIds.has(task.id)}
-                  contexts={getTaskContexts(task.id)}
+                  context={getTaskContext(task.id)}
                   isEditing={editingTaskId === task.id}
                   onStartEdit={() => onEditingTaskIdChange(task.id)}
                   onCloseEdit={() => onEditingTaskIdChange(null)}
@@ -272,7 +273,7 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
                 onComplete={() => handleTaskAction(task)}
                 isSelected={selectedTaskIds.has(task.id)}
                 showCompletionDate
-                contexts={getTaskContexts(task.id)}
+                context={getTaskContext(task.id)}
                 isEditing={editingTaskId === task.id}
                 onStartEdit={() => onEditingTaskIdChange(task.id)}
                 onCloseEdit={() => onEditingTaskIdChange(null)}

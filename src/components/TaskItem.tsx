@@ -15,7 +15,7 @@ interface TaskItemProps {
   isSelected?: boolean
   showCompletionDate?: boolean
   showDate?: boolean
-  contexts?: Context[]
+  context?: Context | null
   isEditing?: boolean
   onStartEdit?: () => void
   onCloseEdit?: () => void
@@ -31,7 +31,7 @@ export function TaskItem({
   isSelected = false,
   showCompletionDate = false,
   showDate = false,
-  contexts = [],
+  context = null,
   isEditing = false,
   onStartEdit,
   onCloseEdit,
@@ -186,22 +186,16 @@ export function TaskItem({
         {task.name}
       </span>
 
-      {/* Context pills - inline with name (filter out General context) */}
-      {(() => {
-        const filteredContexts = contexts.filter(c => c.id !== GENERAL_CONTEXT_ID)
-        return filteredContexts.length > 0 && (
+      {/* Context pill - inline with name (filter out General context) */}
+      {context && context.id !== GENERAL_CONTEXT_ID && (
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {filteredContexts.map(context => (
-            <span
-              key={context.id}
-              className="inline-flex items-center px-2 py-0.5 text-xs text-text-secondary border border-border rounded-full"
-            >
-              {context.name}
-            </span>
-          ))}
+          <span
+            className="inline-flex items-center px-2 py-0.5 text-xs text-text-secondary border border-border rounded-full"
+          >
+            {context.name}
+          </span>
         </div>
-        )
-      })()}
+      )}
 
       {/* Blue dot for unread */}
       {task.hasUnreadAgentMessage && (

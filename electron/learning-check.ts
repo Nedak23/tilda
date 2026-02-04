@@ -5,10 +5,10 @@ import {
   getAILearningNotesByContext,
   createAILearningNote,
   getAllContexts,
+  getContextById,
   GENERAL_CONTEXT_ID,
   getTaskById,
   getMessagesByTask,
-  getContextsByTask,
   completeTask
 } from './database'
 import { getApiKey, getModel } from './settings'
@@ -65,7 +65,7 @@ interface LearningCheckResponse {
 export async function performLearningCheck(
   task: Task,
   conversationHistory: Message[],
-  taskContexts: Context[]
+  taskContext: Context | null
 ): Promise<LearningCheckResult> {
   const apiKey = getApiKey()
   if (!apiKey) {
@@ -77,9 +77,12 @@ export async function performLearningCheck(
   const allContexts = getAllContexts()
   const generalContext = allContexts.find(c => c.id === GENERAL_CONTEXT_ID)
 
-  // Build available contexts: task's explicit contexts + General
-  const availableContexts = [...taskContexts]
-  if (generalContext && !taskContexts.some(c => c.id === GENERAL_CONTEXT_ID)) {
+  // Build available contexts: task's context + General
+  const availableContexts: Context[] = []
+  if (taskContext) {
+    availableContexts.push(taskContext)
+  }
+  if (generalContext && (!taskContext || taskContext.id !== GENERAL_CONTEXT_ID)) {
     availableContexts.push(generalContext)
   }
 
@@ -188,7 +191,7 @@ export function completeTaskWithLearning(taskId: string): CompleteTaskWithLearni
   if (!task) throw new Error(`Task ${taskId} not found`)
 
   const conversationHistory = getMessagesByTask(taskId)
-  const taskContexts = getContextsByTask(taskId)
+  const taskContext = task.contextId ? getContextById(task.contextId) : null
 
   // Complete the task
   const completedTask = completeTask(taskId)
@@ -196,7 +199,7 @@ export function completeTaskWithLearning(taskId: string): CompleteTaskWithLearni
   // Create learning check promise (runs asynchronously)
   let learningCheckPromise: Promise<LearningCheckResult>
   if (conversationHistory.length > 0) {
-    learningCheckPromise = performLearningCheck(task, conversationHistory, taskContexts)
+    learningCheckPromise = performLearningCheck(task, conversationHistory, taskContext || null)
   } else {
     learningCheckPromise = Promise.resolve({ noteSaved: false })
   }

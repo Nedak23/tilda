@@ -31,9 +31,7 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
     addAttachment,
     removeAttachment,
     contexts,
-    taskContextsByTask,
-    setTaskContexts,
-    loadTaskContexts
+    setTaskContext
   } = useTaskStore()
 
   const today = format(new Date(), 'yyyy-MM-dd')
@@ -51,7 +49,7 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
   const [editedDescription, setEditedDescription] = useState(task?.description || '')
   const [localDate, setLocalDate] = useState(task?.dateToWorkOn || defaultDate || today)
   const [localDeadline, setLocalDeadline] = useState(task?.deadline || '')
-  const [localContextIds, setLocalContextIds] = useState<string[]>(defaultContextId ? [defaultContextId] : [])
+  const [localContextId, setLocalContextId] = useState<string | undefined>(defaultContextId)
   const [localRecurrenceRule, setLocalRecurrenceRule] = useState<RecurrenceRule | undefined>(task?.recurrenceRule)
   const [chatInput, setChatInput] = useState('')
   const [showDatePicker, setShowDatePicker] = useState(false)
@@ -81,14 +79,8 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
     }
   }, [activeTask?.id, attachmentsByTask, loadAttachments])
 
-  // Load task contexts when component mounts (edit mode only)
-  useEffect(() => {
-    if (activeTask && !taskContextsByTask[activeTask.id]) {
-      loadTaskContexts(activeTask.id)
-    }
-  }, [activeTask?.id, taskContextsByTask, loadTaskContexts])
-
-  const taskContexts = activeTask ? (taskContextsByTask[activeTask.id] || []) : localContextIds
+  // Get context from task or local state
+  const taskContextId = activeTask?.contextId || localContextId
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -134,7 +126,7 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
       clearTimeout(timer)
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [editedName, editedDescription, localDate, localDeadline, localContextIds, activeTask])
+  }, [editedName, editedDescription, localDate, localDeadline, localContextId, activeTask])
 
   // Handle escape key and Cmd+N (save before switching to new task)
   useEffect(() => {
@@ -152,7 +144,7 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editedName, editedDescription, localDate, localDeadline, localContextIds, activeTask, onSaveAndCreateNew])
+  }, [editedName, editedDescription, localDate, localDeadline, localContextId, activeTask, onSaveAndCreateNew])
 
   // Handle click outside to close dropdowns
   useEffect(() => {
@@ -184,11 +176,9 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
         dateToWorkOn: localDate,
         deadline: localDeadline || undefined,
         description: editedDescription.trim() || undefined,
-        recurrenceRule: localRecurrenceRule
+        recurrenceRule: localRecurrenceRule,
+        contextId: localContextId
       })
-      if (newTask && localContextIds.length > 0) {
-        await setTaskContexts(newTask.id, localContextIds)
-      }
       setCreatedTask(newTask)
       return newTask
     } catch (error) {
@@ -296,28 +286,20 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
     }
   }
 
-  const handleToggleContext = async (contextId: string) => {
+  const handleSelectContext = async (contextId: string | undefined) => {
     if (activeTask) {
-      const newContexts = taskContexts.includes(contextId)
-        ? taskContexts.filter(id => id !== contextId)
-        : [...taskContexts, contextId]
-      await setTaskContexts(activeTask.id, newContexts)
+      await setTaskContext(activeTask.id, contextId || null)
     } else {
       // Create mode: update local state
-      setLocalContextIds(prev =>
-        prev.includes(contextId)
-          ? prev.filter(id => id !== contextId)
-          : [...prev, contextId]
-      )
+      setLocalContextId(contextId)
     }
   }
 
-  const handleRemoveContext = async (contextId: string) => {
+  const handleClearContext = async () => {
     if (activeTask) {
-      const newContexts = taskContexts.filter(id => id !== contextId)
-      await setTaskContexts(activeTask.id, newContexts)
+      await setTaskContext(activeTask.id, null)
     } else {
-      setLocalContextIds(prev => prev.filter(id => id !== contextId))
+      setLocalContextId(undefined)
     }
   }
 
@@ -359,8 +341,8 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
   const isToday = currentDate === today
 
   const filteredContexts = contexts.filter(c => c.id !== GENERAL_CONTEXT_ID)
-  const selectedContexts = filteredContexts.filter(c => taskContexts.includes(c.id))
-  const availableContexts = filteredContexts.filter(c => !taskContexts.includes(c.id))
+  const selectedContext = taskContextId ? filteredContexts.find(c => c.id === taskContextId) : undefined
+  const availableContexts = filteredContexts.filter(c => c.id !== taskContextId)
 
   return (
     <div
@@ -486,50 +468,59 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
               )}
             </div>
 
-            {/* Context pills */}
-            {selectedContexts.map(context => (
-              <span
-                key={context.id}
-                className="inline-flex items-center gap-1 px-2 py-0.5 bg-surface-tertiary rounded text-xs text-text-secondary"
-              >
-                #{context.name}
+            {/* Context selector */}
+            <div className="relative" ref={contextPickerRef}>
+              {selectedContext ? (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-surface-tertiary rounded text-xs text-text-secondary cursor-pointer hover:bg-surface transition-colors"
+                  onClick={() => {
+                    setShowContextPicker(!showContextPicker)
+                    setShowDatePicker(false)
+                    setShowDeadlinePicker(false)
+                  }}
+                >
+                  #{selectedContext.name}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleClearContext()
+                    }}
+                    className="text-text-tertiary hover:text-text transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </span>
+              ) : (
                 <button
-                  onClick={() => handleRemoveContext(context.id)}
-                  className="text-text-tertiary hover:text-text transition-colors"
+                  onClick={() => {
+                    setShowContextPicker(!showContextPicker)
+                    setShowDatePicker(false)
+                    setShowDeadlinePicker(false)
+                  }}
+                  className="inline-flex items-center justify-center w-5 h-5 rounded bg-surface-tertiary text-text-tertiary hover:text-text hover:bg-surface transition-colors"
+                  title="Add context"
                 >
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                   </svg>
                 </button>
-              </span>
-            ))}
-
-            {/* Add context button */}
-            <div className="relative" ref={contextPickerRef}>
-              <button
-                onClick={() => {
-                  setShowContextPicker(!showContextPicker)
-                  setShowDatePicker(false)
-                  setShowDeadlinePicker(false)
-                }}
-                className="inline-flex items-center justify-center w-5 h-5 rounded bg-surface-tertiary text-text-tertiary hover:text-text hover:bg-surface transition-colors"
-                title="Add context"
-              >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-              </button>
+              )}
               {showContextPicker && (
                 <div className="absolute top-full left-0 mt-2 bg-surface-tertiary rounded-lg shadow-elevated p-2 z-20 w-48 max-h-40 overflow-y-auto">
                   {availableContexts.length === 0 ? (
                     <p className="text-xs text-text-tertiary italic px-2 py-1">
-                      {filteredContexts.length === 0 ? 'No contexts' : 'No more contexts'}
+                      {filteredContexts.length === 0 ? 'No contexts' : 'No other contexts'}
                     </p>
                   ) : (
                     availableContexts.map(context => (
                       <button
                         key={context.id}
-                        onClick={() => handleToggleContext(context.id)}
+                        onClick={() => {
+                          handleSelectContext(context.id)
+                          setShowContextPicker(false)
+                        }}
                         className="w-full text-left px-2 py-1.5 rounded hover:bg-surface text-sm text-text transition-colors"
                       >
                         #{context.name}
