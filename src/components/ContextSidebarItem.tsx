@@ -1,25 +1,29 @@
-import { useState } from 'react'
-import { GENERAL_CONTEXT_ID, type Context } from '../types'
+import { useState, useEffect } from 'react'
+import type { Context } from '../types'
 
 interface ContextSidebarItemProps {
   context: Context
   isActive: boolean
   onSelect: () => void
-  onDelete: () => void
   onRename: (newName: string) => void
+  startedTaskCount: number
+  children?: React.ReactNode
 }
 
-export function ContextSidebarItem({ context, isActive, onSelect, onDelete, onRename }: ContextSidebarItemProps) {
-  const [showMenu, setShowMenu] = useState(false)
+export function ContextSidebarItem({ context, isActive, onSelect, onRename, startedTaskCount, children }: ContextSidebarItemProps) {
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameDraft, setRenameDraft] = useState('')
-  const isGeneralContext = context.id === GENERAL_CONTEXT_ID
 
-  const handleStartRename = () => {
-    setRenameDraft(context.name)
-    setIsRenaming(true)
-    setShowMenu(false)
-  }
+  // Persist expand/collapse state in sessionStorage
+  const storageKey = `sidebar-context-expanded:${context.id}`
+  const [isExpanded, setIsExpanded] = useState(() => {
+    const stored = sessionStorage.getItem(storageKey)
+    return stored !== null ? stored === 'true' : false
+  })
+
+  useEffect(() => {
+    sessionStorage.setItem(storageKey, String(isExpanded))
+  }, [isExpanded, storageKey])
 
   const handleSubmitRename = () => {
     if (renameDraft.trim() && renameDraft.trim() !== context.name) {
@@ -40,6 +44,11 @@ export function ContextSidebarItem({ context, isActive, onSelect, onDelete, onRe
     } else if (e.key === 'Escape') {
       handleCancelRename()
     }
+  }
+
+  const handleToggleExpand = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsExpanded(!isExpanded)
   }
 
   if (isRenaming) {
@@ -63,10 +72,13 @@ export function ContextSidebarItem({ context, isActive, onSelect, onDelete, onRe
 
   return (
     <div className="relative group">
-      <button
+      <div
         onClick={onSelect}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect() } }}
         className={`
-          w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left
+          w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-left cursor-pointer
           transition-colors duration-100 titlebar-no-drag
           ${isActive
             ? 'bg-surface-tertiary text-text'
@@ -75,59 +87,35 @@ export function ContextSidebarItem({ context, isActive, onSelect, onDelete, onRe
         `}
       >
         <span className="text-sm text-text-secondary">#</span>
-        <span className="flex-1 text-sm font-medium truncate">{context.name}</span>
-      </button>
+        <span className="text-sm font-medium truncate">{context.name}</span>
 
-      {/* Menu button - shows on hover, but not for General context */}
-      {!isGeneralContext && (
+        {/* Collapse/Expand toggle - directly right of name, visible on hover */}
         <button
-          onClick={(e) => {
-            e.stopPropagation()
-            setShowMenu(!showMenu)
-          }}
-          className={`
-            absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded
-            opacity-0 group-hover:opacity-100 transition-opacity
-            hover:bg-surface-tertiary text-text-secondary hover:text-text
-            ${showMenu ? 'opacity-100' : ''}
-          `}
+          onClick={handleToggleExpand}
+          className="flex-shrink-0 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-text-tertiary hover:text-text"
         >
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
+          <svg
+            className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
           </svg>
         </button>
-      )}
 
-      {/* Dropdown menu */}
-      {showMenu && !isGeneralContext && (
-        <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setShowMenu(false)}
-          />
-          <div className="absolute right-0 top-full mt-1 z-20 bg-surface-secondary border border-border-light rounded-md shadow-lg py-1 min-w-[120px]">
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleStartRename()
-              }}
-              className="w-full px-3 py-1.5 text-left text-sm text-text hover:bg-surface-tertiary"
-            >
-              Rename
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setShowMenu(false)
-                onDelete()
-              }}
-              className="w-full px-3 py-1.5 text-left text-sm text-red-400 hover:bg-surface-tertiary"
-            >
-              Delete
-            </button>
-          </div>
-        </>
-      )}
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Started task count badge - right-aligned */}
+        {startedTaskCount > 0 && (
+          <span className="text-xs text-text-tertiary flex-shrink-0">
+            {startedTaskCount}
+          </span>
+        )}
+      </div>
+
+      {/* Expanded started tasks */}
+      {isExpanded && children}
     </div>
   )
 }

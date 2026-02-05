@@ -15,12 +15,13 @@ import {
 } from '@dnd-kit/sortable'
 import { useTaskStore } from '../stores/taskStore'
 import { SortableContextItem } from './SortableContextItem'
+import { SidebarTaskItem } from './SidebarTaskItem'
 import { CreateContextModal } from './CreateContextModal'
 import { logger } from '../utils/logger'
 import type { ViewType } from '../types'
 
 const navItems: { id: ViewType; label: string }[] = [
-  { id: 'today', label: 'Today' },
+  { id: 'today', label: 'Inbox' },
   { id: 'upcoming', label: 'Upcoming' },
   { id: 'archive', label: 'Logbook' }
 ]
@@ -30,7 +31,7 @@ const NavIcon = ({ id }: { id: ViewType }) => {
     case 'today':
       return (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
         </svg>
       )
     case 'upcoming':
@@ -54,13 +55,17 @@ export function Sidebar() {
   const {
     currentView,
     setCurrentView,
+    activeTaskId,
     getTodayTasks,
     contexts,
     createContext,
-    deleteContext,
     reorderContext,
     updateContext,
-    addContextDocument
+    addContextDocument,
+    getStartedTasksByContext,
+    setActiveTask,
+    completeTask,
+    stopWorking
   } = useTaskStore()
 
   const sensors = useSensors(
@@ -74,7 +79,6 @@ export function Sidebar() {
     })
   )
 
-  const [isContextsExpanded, setIsContextsExpanded] = useState(true)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
   const todayCount = getTodayTasks().length
@@ -87,7 +91,6 @@ export function Sidebar() {
   const handleCreateContext = async (name: string, description?: string, files?: File[]) => {
     try {
       const context = await createContext({ name, description })
-      // Upload files after context is created
       if (files && files.length > 0 && context) {
         const results = await Promise.allSettled(
           files.map(file => addContextDocument(context.id, file))
@@ -107,16 +110,6 @@ export function Sidebar() {
       await updateContext(contextId, { name: newName })
     } catch (error) {
       logger.error('Failed to rename context:', error)
-    }
-  }
-
-  const handleDeleteContext = async (contextId: string) => {
-    if (confirm('Are you sure you want to delete this context? Tasks in this context will not be deleted.')) {
-      try {
-        await deleteContext(contextId)
-      } catch (error) {
-        logger.error('Failed to delete context:', error)
-      }
     }
   }
 
@@ -145,7 +138,7 @@ export function Sidebar() {
         <ul className="space-y-0.5">
           {navItems.map(item => {
             const count = getCounts(item.id)
-            const isActive = currentView === item.id
+            const isActive = currentView === item.id && !activeTaskId
 
             return (
               <li key={item.id}>
@@ -173,66 +166,70 @@ export function Sidebar() {
           })}
         </ul>
 
-        {/* My Contexts section */}
+        {/* Contexts section - each context is individually collapsible */}
         <div className="mt-4">
-          <div className="flex items-center justify-between px-2.5 py-1.5">
-            <button
-              onClick={() => setIsContextsExpanded(!isContextsExpanded)}
-              className="flex items-center gap-1 text-xs font-semibold text-text-secondary uppercase tracking-wider hover:text-text transition-colors"
+          <div className="border-t border-border-light mb-2" />
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleContextDragEnd}
+          >
+            <SortableContext
+              items={contexts.map(c => c.id)}
+              strategy={verticalListSortingStrategy}
             >
-              <svg
-                className={`w-3 h-3 transition-transform ${isContextsExpanded ? 'rotate-90' : ''}`}
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-              </svg>
-              My Contexts
-            </button>
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="p-0.5 text-text-secondary hover:text-text hover:bg-surface-tertiary rounded transition-colors"
-              title="Create context"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-            </button>
-          </div>
-
-          {isContextsExpanded && (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleContextDragEnd}
-            >
-              <SortableContext
-                items={contexts.map(c => c.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <ul className="space-y-0.5 mt-1">
-                  {contexts.map(context => (
+              <ul className="space-y-0.5">
+                {contexts.map(context => {
+                  const startedTasks = getStartedTasksByContext(context.id)
+                  return (
                     <li key={context.id}>
                       <SortableContextItem
                         context={context}
-                        isActive={currentView === `context:${context.id}`}
+                        isActive={currentView === `context:${context.id}` && !activeTaskId}
                         onSelect={() => setCurrentView(`context:${context.id}`)}
-                        onDelete={() => handleDeleteContext(context.id)}
                         onRename={(newName) => handleRenameContext(context.id, newName)}
-                      />
+                        startedTaskCount={startedTasks.length}
+                      >
+                        {startedTasks.map(task => (
+                          <SidebarTaskItem
+                            key={task.id}
+                            task={task}
+                            isActive={activeTaskId === task.id}
+                            onSelect={() => setActiveTask(task.id)}
+                            onComplete={() => completeTask(task.id)}
+                            onUnstart={() => stopWorking(task.id)}
+                          />
+                        ))}
+                      </SortableContextItem>
                     </li>
-                  ))}
-                  {contexts.length === 0 && (
-                    <li className="px-2.5 py-2 text-xs text-text-secondary/70 italic">
-                      No contexts yet
-                    </li>
-                  )}
-                </ul>
-              </SortableContext>
-            </DndContext>
-          )}
+                  )
+                })}
+                {contexts.length === 0 && (
+                  <li className="px-2.5 py-2 text-xs text-text-secondary/70 italic">
+                    No contexts yet
+                  </li>
+                )}
+              </ul>
+            </SortableContext>
+          </DndContext>
         </div>
       </nav>
+
+      {/* Bottom bar */}
+      <div className="flex-shrink-0 border-t border-border-light px-2 py-2">
+        <div className="flex items-center">
+          {/* New Context */}
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="p-1.5 text-text-tertiary hover:text-text hover:bg-surface-tertiary rounded transition-colors titlebar-no-drag"
+            title="New context"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
       {/* Create Context Modal */}
       <CreateContextModal

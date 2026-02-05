@@ -193,6 +193,13 @@ function runMigrations(): void {
   if (!hasClaudeSessionId) {
     db.exec('ALTER TABLE tasks ADD COLUMN claude_session_id TEXT')
   }
+
+  // Migration: Add is_started column to tasks table
+  const taskColumnsForStarted = db.prepare('PRAGMA table_info(tasks)').all() as { name: string }[]
+  const hasIsStarted = taskColumnsForStarted.some(col => col.name === 'is_started')
+  if (!hasIsStarted) {
+    db.exec('ALTER TABLE tasks ADD COLUMN is_started INTEGER NOT NULL DEFAULT 0')
+  }
 }
 
 function ensureGeneralContext(): void {
@@ -246,7 +253,8 @@ function rowToTask(row: Record<string, unknown>): Task {
     recurrenceRule,
     createdAt: row.created_at as string,
     contextId: row.context_id as string | undefined,
-    claudeSessionId: row.claude_session_id as string | undefined
+    claudeSessionId: row.claude_session_id as string | undefined,
+    isStarted: Boolean(row.is_started)
   }
 }
 
@@ -352,6 +360,11 @@ export function updateTask(id: string, input: UpdateTaskInput): Task {
   if (input.sortPosition !== undefined) {
     updates.push('sort_position = ?')
     values.push(input.sortPosition)
+  }
+
+  if (input.isStarted !== undefined) {
+    updates.push('is_started = ?')
+    values.push(input.isStarted ? 1 : 0)
   }
 
   // Handle recurrence rule updates (null means clear, undefined means no change)

@@ -34,7 +34,8 @@ export const ContextDetailView = forwardRef<ContextDetailViewRef, ContextDetailV
     removeContextDocument,
     loadAINotes,
     updateAINote,
-    deleteAINote
+    deleteAINote,
+    startWorking
   } = useTaskStore()
 
   const [isEditingDescription, setIsEditingDescription] = useState(false)
@@ -293,6 +294,8 @@ export const ContextDetailView = forwardRef<ContextDetailViewRef, ContextDetailV
                       onClick={(e) => onTaskClick ? onTaskClick(task.id, e) : onTaskSelect(task)}
                       isSelected={selectedTaskIds?.has(task.id)}
                       showDate
+                      onStartWorking={() => startWorking(task.id)}
+                      showStartWorking
                     />
                   ))}
                 </div>

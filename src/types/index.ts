@@ -34,6 +34,7 @@ export interface Task {
   createdAt: string
   contextId?: string
   claudeSessionId?: string
+  isStarted?: boolean
 }
 
 export interface Message {
@@ -72,6 +73,7 @@ export interface UpdateTaskInput {
   sortPosition?: number
   contextId?: string | null
   recurrenceRule?: RecurrenceRule | null
+  isStarted?: boolean
 }
 
 // IPC API types

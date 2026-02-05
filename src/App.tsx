@@ -284,7 +284,7 @@ function App() {
     }
     switch (currentView) {
       case 'today':
-        return 'Today'
+        return 'Inbox'
       case 'upcoming':
         return 'Upcoming'
       case 'archive':
@@ -378,7 +378,7 @@ function App() {
           {/* Header */}
           <header className="flex-shrink-0 relative">
             {/* View Header */}
-            <div className="flex items-center gap-3 px-6 py-4">
+            <div className={`flex items-center gap-3 py-4 ${isContextView ? 'px-6' : 'pl-4 pr-6'}`}>
               {getViewIcon()}
               <h1 className="text-2xl font-bold text-text">
                 {getViewTitle()}

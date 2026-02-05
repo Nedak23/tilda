@@ -21,6 +21,8 @@ interface TaskItemProps {
   onCloseEdit?: () => void
   onExpandChat?: () => void
   onSaveAndCreateNew?: () => void
+  onStartWorking?: () => void
+  showStartWorking?: boolean
 }
 
 export function TaskItem({
@@ -36,7 +38,9 @@ export function TaskItem({
   onStartEdit,
   onCloseEdit,
   onExpandChat,
-  onSaveAndCreateNew
+  onSaveAndCreateNew,
+  onStartWorking,
+  showStartWorking = false
 }: TaskItemProps) {
   const [isCompleting, setIsCompleting] = useState(false)
   const completionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -130,11 +134,33 @@ export function TaskItem({
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       className={`
-        group flex items-center gap-3 pl-4 pr-4 py-1 mx-2 cursor-pointer rounded-lg select-none
+        group flex items-center gap-3 pl-2 pr-4 py-1 mx-1 cursor-pointer rounded-lg select-none
         ${isSelected ? 'bg-accent-blue/30' : ''}
         ${isCompleting ? 'animate-complete-out' : ''}
       `}
     >
+      {/* Start Working button / Started indicator - always render spacer for alignment when showStartWorking is set */}
+      {showStartWorking && (
+        <div className="w-4 flex items-center justify-center flex-shrink-0">
+          {task.status !== 'archived' && !task.isStarted && onStartWorking ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onStartWorking()
+              }}
+              className="text-text-tertiary hover:text-accent-blue transition-colors opacity-0 group-hover:opacity-100"
+              title="Start working"
+            >
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M16 5v14L5 12z" />
+              </svg>
+            </button>
+          ) : task.status !== 'archived' && task.isStarted ? (
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500" title="Working on this" />
+          ) : null}
+        </div>
+      )}
+
       {/* Checkbox */}
       {task.status !== 'archived' && !isCompleting ? (
         <button
@@ -197,8 +223,8 @@ export function TaskItem({
         </div>
       )}
 
-      {/* Blue dot for unread */}
-      {task.hasUnreadAgentMessage && (
+      {/* Blue dot for unread - hidden in logbook */}
+      {task.hasUnreadAgentMessage && task.status !== 'archived' && (
         <span className="w-2 h-2 rounded-full bg-accent-blue animate-pulse-dot flex-shrink-0" />
       )}
 
