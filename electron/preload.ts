@@ -125,8 +125,8 @@ const api: ElectronAPI = {
     update: (id: string, input: UpdateContextInput) => ipcRenderer.invoke('contexts:update', id, input),
     delete: (id: string) => ipcRenderer.invoke('contexts:delete', id),
     reorder: (id: string, newPosition: number) => ipcRenderer.invoke('contexts:reorder', id, newPosition),
-    getTaskContexts: (taskId: string) => ipcRenderer.invoke('contexts:getTaskContexts', taskId),
-    setTaskContexts: (taskId: string, contextIds: string[]) => ipcRenderer.invoke('contexts:setTaskContexts', taskId, contextIds),
+    getTaskContext: (taskId: string) => ipcRenderer.invoke('contexts:getTaskContext', taskId),
+    setTaskContext: (taskId: string, contextId: string | null) => ipcRenderer.invoke('contexts:setTaskContext', taskId, contextId),
     getTasksByContext: (contextId: string) => ipcRenderer.invoke('contexts:getTasksByContext', contextId)
   },
   contextDocuments: {

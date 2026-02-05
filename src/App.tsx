@@ -26,8 +26,6 @@ function App() {
     completeTask,
     setActiveTask,
     contexts,
-    loadTaskContexts,
-    taskContextsByTask,
     updateTask,
     deleteTasks,
     restoreDeletedTasks,
@@ -78,15 +76,6 @@ function App() {
     return unsubscribe
   }, [])
 
-  // Load task contexts for all tasks
-  useEffect(() => {
-    tasks.forEach(task => {
-      if (!taskContextsByTask[task.id]) {
-        loadTaskContexts(task.id)
-      }
-    })
-  }, [tasks, taskContextsByTask, loadTaskContexts])
-
   const activeTask = tasks.find(t => t.id === activeTaskId)
 
   // Collapse Tilda sidebar when entering full screen task chat mode
@@ -112,13 +101,12 @@ function App() {
       const contextId = currentView.replace('context:', '')
       return tasks.filter(t => {
         if (t.status === 'archived') return false
-        const taskContexts = taskContextsByTask[t.id] || []
-        return taskContexts.includes(contextId)
+        return t.contextId === contextId
       })
     } else {
       return tasks.filter(t => t.status === 'archived')
     }
-  }, [currentView, tasks, taskContextsByTask])
+  }, [currentView, tasks])
 
   // Handle task click with selection logic
   const handleTaskClick = useCallback((taskId: string, e: React.MouseEvent) => {
