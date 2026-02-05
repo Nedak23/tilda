@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import {
   DndContext,
@@ -94,6 +94,7 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
     completeTask,
     reopenTask,
     reorderTask,
+    startWorking,
     contexts,
     tasks
   } = useTaskStore()
@@ -114,6 +115,20 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
     () => groupTasksByDate(getArchivedTasks(), 'completionDate'),
     [getArchivedTasks()]
   )
+
+  const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set())
+
+  const toggleDateGroup = (date: string) => {
+    setCollapsedDates(prev => {
+      const next = new Set(prev)
+      if (next.has(date)) {
+        next.delete(date)
+      } else {
+        next.add(date)
+      }
+      return next
+    })
+  }
 
   const sensors = useSensors(
     useSensor(SelectionAwarePointerSensor, {
@@ -150,7 +165,7 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
       return (
         <div className="flex-1 flex items-center justify-center text-text-tertiary px-4">
           <div className="text-center">
-            <p className="text-sm">No tasks for today</p>
+            <p className="text-sm">No tasks in inbox</p>
             {onCreateTask && (
               <button
                 onClick={onCreateTask}
@@ -188,6 +203,8 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
                 onCloseEdit={() => onEditingTaskIdChange(null)}
                 onExpandChat={() => setActiveTask(task.id)}
                 onSaveAndCreateNew={onSaveAndCreateNew}
+                onStartWorking={() => startWorking(task.id)}
+                showStartWorking
               />
             ))}
           </div>
@@ -220,26 +237,50 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
       <div className="space-y-4" onClick={onClearSelection}>
         {upcomingGroups.map(group => (
           <div key={group.date}>
-            <h3 className="text-xs font-medium text-text-secondary px-4 mb-1">
-              {group.label}
-            </h3>
-            <div>
-              {group.tasks.map(task => (
-                <TaskItem
-                  key={task.id}
-                  task={task}
-                  onClick={(e) => onTaskClick(task.id, e)}
-                  onComplete={() => handleTaskAction(task)}
-                  isSelected={selectedTaskIds.has(task.id)}
-                  context={getTaskContext(task.id)}
-                  isEditing={editingTaskId === task.id}
-                  onStartEdit={() => onEditingTaskIdChange(task.id)}
-                  onCloseEdit={() => onEditingTaskIdChange(null)}
-                  onExpandChat={() => setActiveTask(task.id)}
-                  onSaveAndCreateNew={onSaveAndCreateNew}
-                />
-              ))}
-            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                toggleDateGroup(group.date)
+              }}
+              className="flex items-center gap-1.5 px-3 mb-1 w-full text-left"
+            >
+              <svg
+                className={`w-3 h-3 text-text-tertiary transition-transform ${collapsedDates.has(group.date) ? '' : 'rotate-90'}`}
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path d="M10 6l6 6-6 6V6z" />
+              </svg>
+              <h3 className="text-xs font-medium text-text-secondary">
+                {group.label}
+              </h3>
+              {collapsedDates.has(group.date) && (
+                <span className="text-xs text-text-tertiary ml-1">
+                  ({group.tasks.length})
+                </span>
+              )}
+            </button>
+            {!collapsedDates.has(group.date) && (
+              <div>
+                {group.tasks.map(task => (
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    onClick={(e) => onTaskClick(task.id, e)}
+                    onComplete={() => handleTaskAction(task)}
+                    isSelected={selectedTaskIds.has(task.id)}
+                    context={getTaskContext(task.id)}
+                    isEditing={editingTaskId === task.id}
+                    onStartEdit={() => onEditingTaskIdChange(task.id)}
+                    onCloseEdit={() => onEditingTaskIdChange(null)}
+                    onExpandChat={() => setActiveTask(task.id)}
+                    onSaveAndCreateNew={onSaveAndCreateNew}
+                    onStartWorking={() => startWorking(task.id)}
+                    showStartWorking
+                  />
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -261,27 +302,49 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
     <div className="space-y-4" onClick={onClearSelection}>
       {archiveGroups.map(group => (
         <div key={group.date}>
-          <h3 className="text-xs font-medium text-text-secondary px-4 mb-1">
-            {group.label}
-          </h3>
-          <div>
-            {group.tasks.map(task => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                onClick={(e) => onTaskClick(task.id, e)}
-                onComplete={() => handleTaskAction(task)}
-                isSelected={selectedTaskIds.has(task.id)}
-                showCompletionDate
-                context={getTaskContext(task.id)}
-                isEditing={editingTaskId === task.id}
-                onStartEdit={() => onEditingTaskIdChange(task.id)}
-                onCloseEdit={() => onEditingTaskIdChange(null)}
-                onExpandChat={() => setActiveTask(task.id)}
-                onSaveAndCreateNew={onSaveAndCreateNew}
-              />
-            ))}
-          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleDateGroup(group.date)
+            }}
+            className="flex items-center gap-1.5 px-3 mb-1 w-full text-left group/date"
+          >
+            <svg
+              className={`w-3 h-3 text-text-tertiary transition-transform ${collapsedDates.has(group.date) ? '' : 'rotate-90'}`}
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path d="M10 6l6 6-6 6V6z" />
+            </svg>
+            <h3 className="text-xs font-medium text-text-secondary">
+              {group.label}
+            </h3>
+            {collapsedDates.has(group.date) && (
+              <span className="text-xs text-text-tertiary ml-1">
+                ({group.tasks.length})
+              </span>
+            )}
+          </button>
+          {!collapsedDates.has(group.date) && (
+            <div>
+              {group.tasks.map(task => (
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  onClick={(e) => onTaskClick(task.id, e)}
+                  onComplete={() => handleTaskAction(task)}
+                  isSelected={selectedTaskIds.has(task.id)}
+                  showCompletionDate
+                  context={getTaskContext(task.id)}
+                  isEditing={editingTaskId === task.id}
+                  onStartEdit={() => onEditingTaskIdChange(task.id)}
+                  onCloseEdit={() => onEditingTaskIdChange(null)}
+                  onExpandChat={() => setActiveTask(task.id)}
+                  onSaveAndCreateNew={onSaveAndCreateNew}
+                />
+              ))}
+            </div>
+          )}
         </div>
       ))}
     </div>

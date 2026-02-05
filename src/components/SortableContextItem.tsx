@@ -7,16 +7,18 @@ interface SortableContextItemProps {
   context: Context
   isActive: boolean
   onSelect: () => void
-  onDelete: () => void
   onRename: (newName: string) => void
+  startedTaskCount: number
+  children?: React.ReactNode
 }
 
 export function SortableContextItem({
   context,
   isActive,
   onSelect,
-  onDelete,
-  onRename
+  onRename,
+  startedTaskCount,
+  children
 }: SortableContextItemProps) {
   const {
     attributes,
@@ -45,9 +47,11 @@ export function SortableContextItem({
         context={context}
         isActive={isActive}
         onSelect={onSelect}
-        onDelete={onDelete}
         onRename={onRename}
-      />
+        startedTaskCount={startedTaskCount}
+      >
+        {children}
+      </ContextSidebarItem>
     </div>
   )
 }

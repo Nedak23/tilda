@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Task, Message, Attachment, ViewType, CreateTaskInput, UpdateTaskInput, TildaMessage, TildaAttachment, Context, ContextDocument, CreateContextInput, UpdateContextInput, AILearningNote, UpdateAILearningNoteInput } from '../types'
+import { GENERAL_CONTEXT_ID } from '../types'
 import { readFileContent, getFileMimeType } from '../utils/fileUtils'
 import { logger } from '../utils/logger'
 
@@ -85,6 +86,11 @@ interface TaskStore {
   updateContext: (id: string, input: UpdateContextInput) => Promise<void>
   deleteContext: (id: string) => Promise<void>
   reorderContext: (id: string, newIndex: number) => Promise<void>
+
+  // Start/Stop working actions
+  startWorking: (taskId: string) => Promise<void>
+  stopWorking: (taskId: string) => Promise<void>
+  getStartedTasksByContext: (contextId: string) => Task[]
 
   // Task-Context relationship actions
   setTaskContext: (taskId: string, contextId: string | null) => Promise<void>
@@ -186,6 +192,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
   completeTask: async (id) => {
     try {
+      // Clear isStarted before completing
+      await get().updateTask(id, { isStarted: false })
       const completedTask = await window.api.tasks.complete(id)
       // Fetch updated tasks to get any new recurring instances
       // without triggering isLoading state change
@@ -1023,6 +1031,41 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       set({ error: (error as Error).message })
       throw error
     }
+  },
+
+  // Start/Stop working actions
+  startWorking: async (taskId) => {
+    const task = get().tasks.find(t => t.id === taskId)
+    if (!task) return
+
+    // If task has no context, assign to General
+    if (!task.contextId) {
+      await get().setTaskContext(taskId, GENERAL_CONTEXT_ID)
+    }
+
+    // If task is upcoming, move it to today
+    if (task.status === 'upcoming') {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const todayStr = today.toISOString().split('T')[0]
+      await get().updateTask(taskId, { dateToWorkOn: todayStr })
+    }
+
+    // Mark as started
+    await get().updateTask(taskId, { isStarted: true })
+
+    // Navigate to chat
+    await get().setActiveTask(taskId)
+  },
+
+  stopWorking: async (taskId) => {
+    await get().updateTask(taskId, { isStarted: false })
+  },
+
+  getStartedTasksByContext: (contextId) => {
+    return get().tasks.filter(
+      t => t.isStarted && t.contextId === contextId && t.status !== 'archived'
+    )
   },
 
   // Task-Context relationship actions
