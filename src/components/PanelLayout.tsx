@@ -56,15 +56,30 @@ export function PanelLayout({
 
     initializedRef.current = true
 
+    // Mark as programmatic to prevent resize callbacks from overriding state
+    isProgrammaticLeftRef.current = true
+    isProgrammaticRightRef.current = true
+
     // Defer resize to next frame to ensure the panel library has finished
     // its internal layout calculations after mounting
     requestAnimationFrame(() => {
-      if (leftSizeRef.current !== DEFAULT_TILDA_SIZE && !isLeftCollapsed) {
+      // Restore collapse state on initial mount
+      if (isLeftCollapsed) {
+        leftPanelHandle.collapse()
+      } else if (leftSizeRef.current !== DEFAULT_TILDA_SIZE) {
         leftPanelHandle.resize(`${leftSizeRef.current}%`)
       }
-      if (rightSizeRef.current !== DEFAULT_NAV_SIZE && !isRightCollapsed) {
+      if (isRightCollapsed) {
+        rightPanelHandle.collapse()
+      } else if (rightSizeRef.current !== DEFAULT_NAV_SIZE) {
         rightPanelHandle.resize(`${rightSizeRef.current}%`)
       }
+
+      // Reset programmatic flags after panel library settles
+      setTimeout(() => {
+        isProgrammaticLeftRef.current = false
+        isProgrammaticRightRef.current = false
+      }, 100)
     })
   }, [leftPanelHandle, rightPanelHandle, isLeftCollapsed, isRightCollapsed])
 
