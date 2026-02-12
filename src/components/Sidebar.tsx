@@ -62,6 +62,7 @@ export function Sidebar() {
     reorderContext,
     updateContext,
     addContextDocument,
+    addContextDocumentFromData,
     getStartedTasksByContext,
     setActiveTask,
     completeTask,
@@ -88,7 +89,7 @@ export function Sidebar() {
     return undefined
   }
 
-  const handleCreateContext = async (name: string, description?: string, files?: File[]) => {
+  const handleCreateContext = async (name: string, description?: string, files?: File[], directoryFiles?: import('../types').DirectoryFile[]) => {
     try {
       const context = await createContext({ name, description })
       if (files && files.length > 0 && context) {
@@ -98,6 +99,15 @@ export function Sidebar() {
         const failures = results.filter(r => r.status === 'rejected')
         if (failures.length > 0) {
           logger.error(`Failed to upload ${failures.length} of ${files.length} files`)
+        }
+      }
+      if (directoryFiles && directoryFiles.length > 0 && context) {
+        const results = await Promise.allSettled(
+          directoryFiles.map(file => addContextDocumentFromData(context.id, file))
+        )
+        const failures = results.filter(r => r.status === 'rejected')
+        if (failures.length > 0) {
+          logger.error(`Failed to upload ${failures.length} of ${directoryFiles.length} directory files`)
         }
       }
     } catch (error) {

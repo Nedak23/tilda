@@ -516,23 +516,32 @@ function buildUserContentWithAttachments(
 ): Anthropic.ContentBlockParam[] {
   const content: Anthropic.ContentBlockParam[] = []
 
-  // Add image attachments as image content blocks
+  // Add attachments as content blocks
   for (const attachment of attachments) {
+    const base64Match = attachment.content.match(/^data:([^;]+);base64,(.+)$/)
+    if (!base64Match) continue
+
+    const base64Data = base64Match[2]
+
     if (attachment.mimeType.startsWith('image/')) {
-      // Extract base64 data from data URL (remove "data:image/png;base64," prefix)
-      const base64Match = attachment.content.match(/^data:([^;]+);base64,(.+)$/)
-      if (base64Match) {
-        const mediaType = base64Match[1] as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
-        const base64Data = base64Match[2]
-        content.push({
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: mediaType,
-            data: base64Data
-          }
-        })
-      }
+      const mediaType = base64Match[1] as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+      content.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: mediaType,
+          data: base64Data
+        }
+      })
+    } else if (attachment.mimeType === 'application/pdf') {
+      content.push({
+        type: 'document',
+        source: {
+          type: 'base64',
+          media_type: 'application/pdf',
+          data: base64Data
+        }
+      } as Anthropic.ContentBlockParam)
     }
   }
 

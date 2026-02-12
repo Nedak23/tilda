@@ -200,6 +200,30 @@ function runMigrations(): void {
   if (!hasIsStarted) {
     db.exec('ALTER TABLE tasks ADD COLUMN is_started INTEGER NOT NULL DEFAULT 0')
   }
+
+  // Migration: Add relative_path column to context_documents
+  const contextDocColumns = db.prepare('PRAGMA table_info(context_documents)').all() as { name: string }[]
+  if (!contextDocColumns.some(col => col.name === 'relative_path')) {
+    db.exec('ALTER TABLE context_documents ADD COLUMN relative_path TEXT')
+  }
+
+  // Migration: Add attachment_ids column to messages table
+  const messageColumns = db.prepare('PRAGMA table_info(messages)').all() as { name: string }[]
+  if (!messageColumns.some(col => col.name === 'attachment_ids')) {
+    db.exec('ALTER TABLE messages ADD COLUMN attachment_ids TEXT')
+  }
+
+  // Migration: Add relative_path column to attachments
+  const attachmentColumns = db.prepare('PRAGMA table_info(attachments)').all() as { name: string }[]
+  if (!attachmentColumns.some(col => col.name === 'relative_path')) {
+    db.exec('ALTER TABLE attachments ADD COLUMN relative_path TEXT')
+  }
+
+  // Migration: Add relative_path column to tilda_attachments
+  const tildaAttachmentColumns = db.prepare('PRAGMA table_info(tilda_attachments)').all() as { name: string }[]
+  if (!tildaAttachmentColumns.some(col => col.name === 'relative_path')) {
+    db.exec('ALTER TABLE tilda_attachments ADD COLUMN relative_path TEXT')
+  }
 }
 
 function ensureGeneralContext(): void {
@@ -552,12 +576,22 @@ export function migrateTasksToToday(): void {
 // Message operations
 
 function rowToMessage(row: Record<string, unknown>): Message {
+  const attachmentIdsStr = row.attachment_ids as string | null
+  let attachmentIds: string[] | undefined
+  if (attachmentIdsStr) {
+    try {
+      attachmentIds = JSON.parse(attachmentIdsStr)
+    } catch {
+      attachmentIds = undefined
+    }
+  }
   return {
     id: row.id as string,
     taskId: row.task_id as string,
     sender: row.sender as MessageSender,
     content: row.content as string,
-    timestamp: row.timestamp as string
+    timestamp: row.timestamp as string,
+    attachmentIds
   }
 }
 
@@ -568,16 +602,17 @@ export function getMessagesByTask(taskId: string): Message[] {
   return rows.map(row => rowToMessage(row as Record<string, unknown>))
 }
 
-export function createMessage(taskId: string, content: string, sender: MessageSender): Message {
+export function createMessage(taskId: string, content: string, sender: MessageSender, attachmentIds?: string[]): Message {
   const id = uuidv4()
   const timestamp = new Date().toISOString()
+  const attachmentIdsStr = attachmentIds && attachmentIds.length > 0 ? JSON.stringify(attachmentIds) : null
 
   db.prepare(`
-    INSERT INTO messages (id, task_id, sender, content, timestamp)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(id, taskId, sender, content, timestamp)
+    INSERT INTO messages (id, task_id, sender, content, timestamp, attachment_ids)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(id, taskId, sender, content, timestamp, attachmentIdsStr)
 
-  return { id, taskId, sender, content, timestamp }
+  return { id, taskId, sender, content, timestamp, attachmentIds }
 }
 
 export function deleteMessage(id: string): void {
@@ -613,7 +648,8 @@ function rowToAttachment(row: Record<string, unknown>): Attachment {
     filename: row.filename as string,
     content: row.content as string,
     mimeType: row.mime_type as string,
-    createdAt: row.created_at as string
+    createdAt: row.created_at as string,
+    relativePath: row.relative_path as string | undefined
   }
 }
 
@@ -628,21 +664,43 @@ export function createAttachment(
   taskId: string,
   filename: string,
   content: string,
-  mimeType: string
+  mimeType: string,
+  relativePath?: string
 ): Attachment {
   const id = uuidv4()
   const createdAt = new Date().toISOString()
 
   db.prepare(`
-    INSERT INTO attachments (id, task_id, filename, content, mime_type, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, taskId, filename, content, mimeType, createdAt)
+    INSERT INTO attachments (id, task_id, filename, content, mime_type, created_at, relative_path)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, taskId, filename, content, mimeType, createdAt, relativePath ?? null)
 
-  return { id, taskId, filename, content, mimeType, createdAt }
+  return { id, taskId, filename, content, mimeType, createdAt, relativePath }
 }
 
 export function deleteAttachment(id: string): void {
   db.prepare('DELETE FROM attachments WHERE id = ?').run(id)
+}
+
+export function getPendingTaskAttachments(taskId: string): Attachment[] {
+  // Get all attachment IDs that are linked to messages for this task
+  const messagesWithAttachments = db.prepare(
+    "SELECT attachment_ids FROM messages WHERE task_id = ? AND attachment_ids IS NOT NULL AND attachment_ids != ''"
+  ).all(taskId) as { attachment_ids: string }[]
+
+  const linkedIds = new Set<string>()
+  for (const msg of messagesWithAttachments) {
+    try {
+      const ids = JSON.parse(msg.attachment_ids) as string[]
+      ids.forEach(id => linkedIds.add(id))
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  // Get all attachments for this task that are NOT linked to any message
+  const allAttachments = getAttachmentsByTask(taskId)
+  return allAttachments.filter(a => !linkedIds.has(a.id))
 }
 
 // Tilda message operations
@@ -723,7 +781,8 @@ function rowToTildaAttachment(row: Record<string, unknown>): TildaAttachment {
     filename: row.filename as string,
     content: row.content as string,
     mimeType: row.mime_type as string,
-    createdAt: row.created_at as string
+    createdAt: row.created_at as string,
+    relativePath: row.relative_path as string | undefined
   }
 }
 
@@ -772,17 +831,18 @@ export function getPendingTildaAttachments(): TildaAttachment[] {
 export function createTildaAttachment(
   filename: string,
   content: string,
-  mimeType: string
+  mimeType: string,
+  relativePath?: string
 ): TildaAttachment {
   const id = uuidv4()
   const createdAt = new Date().toISOString()
 
   db.prepare(`
-    INSERT INTO tilda_attachments (id, filename, content, mime_type, created_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(id, filename, content, mimeType, createdAt)
+    INSERT INTO tilda_attachments (id, filename, content, mime_type, created_at, relative_path)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(id, filename, content, mimeType, createdAt, relativePath ?? null)
 
-  return { id, filename, content, mimeType, createdAt }
+  return { id, filename, content, mimeType, createdAt, relativePath }
 }
 
 export function deleteTildaAttachment(id: string): void {
@@ -978,7 +1038,8 @@ function rowToContextDocument(row: Record<string, unknown>): ContextDocument {
     content: row.content as string,
     mimeType: row.mime_type as string,
     fileSize: row.file_size as number,
-    createdAt: row.created_at as string
+    createdAt: row.created_at as string,
+    relativePath: row.relative_path as string | undefined
   }
 }
 
@@ -994,17 +1055,18 @@ export function createContextDocument(
   filename: string,
   content: string,
   mimeType: string,
-  fileSize: number
+  fileSize: number,
+  relativePath?: string
 ): ContextDocument {
   const id = uuidv4()
   const createdAt = new Date().toISOString()
 
   db.prepare(`
-    INSERT INTO context_documents (id, context_id, filename, content, mime_type, file_size, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, contextId, filename, content, mimeType, fileSize, createdAt)
+    INSERT INTO context_documents (id, context_id, filename, content, mime_type, file_size, created_at, relative_path)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, contextId, filename, content, mimeType, fileSize, createdAt, relativePath ?? null)
 
-  return { id, contextId, filename, content, mimeType, fileSize, createdAt }
+  return { id, contextId, filename, content, mimeType, fileSize, createdAt, relativePath }
 }
 
 export function deleteContextDocument(id: string): void {

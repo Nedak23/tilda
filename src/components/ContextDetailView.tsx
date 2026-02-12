@@ -1,6 +1,6 @@
 import { useState, useEffect, useImperativeHandle, forwardRef } from 'react'
 import { useTaskStore } from '../stores/taskStore'
-import { ContextDocumentList } from './ContextDocumentList'
+import { ContextFileTree } from './ContextFileTree'
 import { AILearningNotesList } from './AILearningNotesList'
 import { AILearningNoteEditor } from './AILearningNoteEditor'
 import { TaskItem } from './TaskItem'
@@ -31,6 +31,7 @@ export const ContextDetailView = forwardRef<ContextDetailViewRef, ContextDetailV
     updateContext,
     loadContextDocuments,
     addContextDocument,
+    addContextDocumentFromData,
     removeContextDocument,
     loadAINotes,
     updateAINote,
@@ -126,6 +127,18 @@ export const ContextDetailView = forwardRef<ContextDetailViewRef, ContextDetailV
     }
   }
 
+  const handleUploadDirectory = async () => {
+    try {
+      const files = await window.api.dialog.selectDirectory()
+      if (!files) return
+      for (const file of files) {
+        await addContextDocumentFromData(contextId, file)
+      }
+    } catch (error) {
+      logger.error('Failed to upload directory:', error)
+    }
+  }
+
   const handleDeleteDocument = async (id: string) => {
     try {
       await removeContextDocument(id, contextId)
@@ -192,64 +205,73 @@ export const ContextDetailView = forwardRef<ContextDetailViewRef, ContextDetailV
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         <div className="px-6 py-4 space-y-6">
-          {/* Description section */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-medium text-text-secondary">Description</h2>
-              {!isEditingDescription && (
-                <button
-                  onClick={handleStartEditDescription}
-                  className="text-xs text-text-secondary hover:text-text"
-                >
-                  Edit
-                </button>
-              )}
-            </div>
-            {isEditingDescription ? (
-              <div className="space-y-2">
-                <textarea
-                  value={descriptionDraft}
-                  onChange={(e) => setDescriptionDraft(e.target.value)}
-                  placeholder="What is this context for?"
-                  className="w-full px-3 py-2 bg-surface-tertiary border border-border-light rounded-md text-text placeholder-text-secondary/50 focus:outline-none focus:ring-1 focus:ring-border-selected focus:border-border-selected resize-none"
-                  rows={3}
-                  autoFocus
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleSaveDescription}
-                    className="px-3 py-1 text-sm bg-accent text-white rounded hover:bg-accent/90"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={() => setIsEditingDescription(false)}
-                    className="px-3 py-1 text-sm text-text-secondary hover:text-text"
-                  >
-                    Cancel
-                  </button>
+          {/* Two-column layout: Description+Notes | File Tree */}
+          <div className="flex gap-6">
+            {/* Left column: Description + AI Learning Notes */}
+            <div className="flex-1 space-y-6 min-w-0">
+              {/* Description section */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-sm font-medium text-text-secondary">Description</h2>
+                  {!isEditingDescription && (
+                    <button
+                      onClick={handleStartEditDescription}
+                      className="text-xs text-text-secondary hover:text-text"
+                    >
+                      Edit
+                    </button>
+                  )}
                 </div>
+                {isEditingDescription ? (
+                  <div className="space-y-2">
+                    <textarea
+                      value={descriptionDraft}
+                      onChange={(e) => setDescriptionDraft(e.target.value)}
+                      placeholder="What is this context for?"
+                      className="w-full px-3 py-2 bg-surface-tertiary border border-border-light rounded-md text-text placeholder-text-secondary/50 focus:outline-none focus:ring-1 focus:ring-border-selected focus:border-border-selected resize-none"
+                      rows={3}
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveDescription}
+                        className="px-3 py-1 text-sm bg-accent text-white rounded hover:bg-accent/90"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setIsEditingDescription(false)}
+                        className="px-3 py-1 text-sm text-text-secondary hover:text-text"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-text-secondary/80">
+                    {context.description || 'No description'}
+                  </p>
+                )}
               </div>
-            ) : (
-              <p className="text-sm text-text-secondary/80">
-                {context.description || 'No description'}
-              </p>
-            )}
+
+              {/* AI Learning Notes section */}
+              <AILearningNotesList
+                notes={aiNotes}
+                onEdit={handleEditAINote}
+                onDelete={handleDeleteAINote}
+              />
+            </div>
+
+            {/* Right column: File Tree */}
+            <div className="flex-1 min-w-0">
+              <ContextFileTree
+                documents={documents}
+                onUpload={handleUploadDocument}
+                onUploadDirectory={handleUploadDirectory}
+                onDelete={handleDeleteDocument}
+              />
+            </div>
           </div>
-
-          {/* Documents section */}
-          <ContextDocumentList
-            documents={documents}
-            onUpload={handleUploadDocument}
-            onDelete={handleDeleteDocument}
-          />
-
-          {/* AI Learning Notes section */}
-          <AILearningNotesList
-            notes={aiNotes}
-            onEdit={handleEditAINote}
-            onDelete={handleDeleteAINote}
-          />
 
           {/* Tasks section - hidden for General context since it applies to all tasks */}
           {contextId !== GENERAL_CONTEXT_ID && (

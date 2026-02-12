@@ -23,12 +23,13 @@ const api: ElectronAPI = {
     delete: (id: string) => ipcRenderer.invoke('tasks:delete', id),
     reorder: (id: string, newPosition: number) => ipcRenderer.invoke('tasks:reorder', id, newPosition),
     clearUnread: (id: string) => ipcRenderer.invoke('tasks:clearUnread', id),
+    setActive: (id: string | null) => ipcRenderer.send('task:setActive', id),
     migrateTasks: () => ipcRenderer.invoke('tasks:migrate')
   },
   messages: {
     getByTask: (taskId: string) => ipcRenderer.invoke('messages:getByTask', taskId),
-    create: (taskId: string, content: string, sender: MessageSender) =>
-      ipcRenderer.invoke('messages:create', taskId, content, sender),
+    create: (taskId: string, content: string, sender: MessageSender, attachmentIds?: string[]) =>
+      ipcRenderer.invoke('messages:create', taskId, content, sender, attachmentIds),
     delete: (id: string) => ipcRenderer.invoke('messages:delete', id),
     deleteFromId: (taskId: string, messageId: string) =>
       ipcRenderer.invoke('messages:deleteFromId', taskId, messageId),
@@ -37,12 +38,13 @@ const api: ElectronAPI = {
   },
   attachments: {
     getByTask: (taskId: string) => ipcRenderer.invoke('attachments:getByTask', taskId),
-    create: (taskId: string, filename: string, content: string, mimeType: string) =>
-      ipcRenderer.invoke('attachments:create', taskId, filename, content, mimeType),
+    getPending: (taskId: string) => ipcRenderer.invoke('attachments:getPending', taskId),
+    create: (taskId: string, filename: string, content: string, mimeType: string, relativePath?: string) =>
+      ipcRenderer.invoke('attachments:create', taskId, filename, content, mimeType, relativePath),
     delete: (id: string) => ipcRenderer.invoke('attachments:delete', id)
   },
   llm: {
-    sendMessage: (taskId: string, userMessage: string, onChunk: (chunk: string) => void) => {
+    sendMessage: (taskId: string, userMessage: string, onChunk: (chunk: string) => void, attachmentIds?: string[]) => {
       // Create a unique channel for this request
       const channel = `llm:chunk:${taskId}:${Date.now()}`
 
@@ -51,7 +53,7 @@ const api: ElectronAPI = {
       ipcRenderer.on(channel, listener)
 
       // Send the request
-      return ipcRenderer.invoke('llm:sendMessage', taskId, userMessage, channel).finally(() => {
+      return ipcRenderer.invoke('llm:sendMessage', taskId, userMessage, channel, attachmentIds).finally(() => {
         ipcRenderer.removeListener(channel, listener)
       })
     },
@@ -113,8 +115,8 @@ const api: ElectronAPI = {
   tildaAttachments: {
     getAll: () => ipcRenderer.invoke('tildaAttachments:getAll'),
     getPending: () => ipcRenderer.invoke('tildaAttachments:getPending'),
-    create: (filename: string, content: string, mimeType: string) =>
-      ipcRenderer.invoke('tildaAttachments:create', filename, content, mimeType),
+    create: (filename: string, content: string, mimeType: string, relativePath?: string) =>
+      ipcRenderer.invoke('tildaAttachments:create', filename, content, mimeType, relativePath),
     delete: (id: string) => ipcRenderer.invoke('tildaAttachments:delete', id),
     clear: () => ipcRenderer.invoke('tildaAttachments:clear')
   },
@@ -131,8 +133,8 @@ const api: ElectronAPI = {
   },
   contextDocuments: {
     getByContext: (contextId: string) => ipcRenderer.invoke('contextDocuments:getByContext', contextId),
-    create: (contextId: string, filename: string, content: string, mimeType: string, fileSize: number) =>
-      ipcRenderer.invoke('contextDocuments:create', contextId, filename, content, mimeType, fileSize),
+    create: (contextId: string, filename: string, content: string, mimeType: string, fileSize: number, relativePath?: string) =>
+      ipcRenderer.invoke('contextDocuments:create', contextId, filename, content, mimeType, fileSize, relativePath),
     delete: (id: string) => ipcRenderer.invoke('contextDocuments:delete', id)
   },
   aiNotes: {
@@ -170,6 +172,12 @@ const api: ElectronAPI = {
   },
   feedback: {
     send: (input: FeedbackInput) => ipcRenderer.invoke('feedback:send', input)
+  },
+  dialog: {
+    selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory')
+  },
+  shell: {
+    openWorkingFolder: (taskId: string) => ipcRenderer.invoke('shell:openWorkingFolder', taskId)
   }
 }
 

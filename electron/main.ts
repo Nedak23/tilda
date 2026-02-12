@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import path from 'path'
+import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { Resend } from 'resend'
 import { logger, isDev } from './logger'
@@ -24,6 +25,7 @@ import {
   deleteMessagesFromId,
   updateMessageContent,
   getAttachmentsByTask,
+  getPendingTaskAttachments,
   createAttachment,
   deleteAttachment,
   setUnreadAgentMessage,
@@ -57,7 +59,7 @@ import {
 } from './database'
 import { completeTaskWithLearning } from './learning-check'
 import { sendMessage, cancelRequest, regenerateResponse, getProcessStatus } from './llm'
-import { extractAndCleanup, cleanupOrphanedFolders } from './claude-code'
+import { extractAndCleanup, cleanupOrphanedFolders, getWorkingFolder } from './claude-code'
 import { sendTildaMessage, cancelTildaRequest, regenerateTildaResponse } from './tilda'
 import { getSettings, saveSettings, type Settings } from './settings'
 import type { CreateTaskInput, UpdateTaskInput, MessageSender, CreateContextInput, UpdateContextInput, CreateAILearningNoteInput, UpdateAILearningNoteInput, FeedbackInput } from '../src/types'
@@ -178,8 +180,8 @@ ipcMain.handle('messages:getByTask', (_event, taskId: string) => {
   return getMessagesByTask(taskId)
 })
 
-ipcMain.handle('messages:create', (_event, taskId: string, content: string, sender: MessageSender) => {
-  return createMessage(taskId, content, sender)
+ipcMain.handle('messages:create', (_event, taskId: string, content: string, sender: MessageSender, attachmentIds?: string[]) => {
+  return createMessage(taskId, content, sender, attachmentIds)
 })
 
 ipcMain.handle('messages:delete', (_event, id: string) => {
@@ -199,8 +201,12 @@ ipcMain.handle('attachments:getByTask', (_event, taskId: string) => {
   return getAttachmentsByTask(taskId)
 })
 
-ipcMain.handle('attachments:create', (_event, taskId: string, filename: string, content: string, mimeType: string) => {
-  return createAttachment(taskId, filename, content, mimeType)
+ipcMain.handle('attachments:getPending', (_event, taskId: string) => {
+  return getPendingTaskAttachments(taskId)
+})
+
+ipcMain.handle('attachments:create', (_event, taskId: string, filename: string, content: string, mimeType: string, relativePath?: string) => {
+  return createAttachment(taskId, filename, content, mimeType, relativePath)
 })
 
 ipcMain.handle('attachments:delete', (_event, id: string) => {
@@ -211,11 +217,11 @@ ipcMain.handle('attachments:delete', (_event, id: string) => {
 // Track which task the user is currently viewing
 let activeTaskId: string | null = null
 
-ipcMain.handle('llm:sendMessage', async (event, taskId: string, userMessage: string, channel: string) => {
+ipcMain.handle('llm:sendMessage', async (event, taskId: string, userMessage: string, channel: string, attachmentIds?: string[]) => {
   try {
     const response = await sendMessage(taskId, userMessage, (chunk: string) => {
       event.sender.send(channel, chunk)
-    })
+    }, attachmentIds)
 
     // If user navigated away during processing, mark as unread
     if (activeTaskId !== taskId) {
@@ -326,8 +332,8 @@ ipcMain.handle('tildaAttachments:getPending', () => {
   return getPendingTildaAttachments()
 })
 
-ipcMain.handle('tildaAttachments:create', (_event, filename: string, content: string, mimeType: string) => {
-  return createTildaAttachment(filename, content, mimeType)
+ipcMain.handle('tildaAttachments:create', (_event, filename: string, content: string, mimeType: string, relativePath?: string) => {
+  return createTildaAttachment(filename, content, mimeType, relativePath)
 })
 
 ipcMain.handle('tildaAttachments:delete', (_event, id: string) => {
@@ -380,12 +386,86 @@ ipcMain.handle('contextDocuments:getByContext', (_event, contextId: string) => {
   return getDocumentsByContext(contextId)
 })
 
-ipcMain.handle('contextDocuments:create', (_event, contextId: string, filename: string, content: string, mimeType: string, fileSize: number) => {
-  return createContextDocument(contextId, filename, content, mimeType, fileSize)
+ipcMain.handle('contextDocuments:create', (_event, contextId: string, filename: string, content: string, mimeType: string, fileSize: number, relativePath?: string) => {
+  return createContextDocument(contextId, filename, content, mimeType, fileSize, relativePath)
 })
 
 ipcMain.handle('contextDocuments:delete', (_event, id: string) => {
   deleteContextDocument(id)
+})
+
+// IPC Handler for directory selection
+ipcMain.handle('dialog:selectDirectory', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory']
+  })
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
+  }
+
+  const dirPath = result.filePaths[0]
+  const supportedExtensions = /\.(txt|md|markdown|pdf|png|jpg|jpeg|gif|webp)$/i
+  const hiddenPattern = /(?:^|[/\\])\./
+
+  const files: { filename: string; relativePath: string; content: string; mimeType: string; fileSize: number }[] = []
+
+  function getMimeType(filePath: string): string {
+    const ext = path.extname(filePath).toLowerCase()
+    const mimeTypes: Record<string, string> = {
+      '.txt': 'text/plain',
+      '.md': 'text/markdown',
+      '.markdown': 'text/markdown',
+      '.pdf': 'application/pdf',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp'
+    }
+    return mimeTypes[ext] || 'text/plain'
+  }
+
+  function isTextMime(mimeType: string): boolean {
+    return mimeType.startsWith('text/')
+  }
+
+  function readDirectoryRecursive(currentPath: string, basePath: string) {
+    const entries = fs.readdirSync(currentPath, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = path.join(currentPath, entry.name)
+      const relPath = path.relative(basePath, fullPath)
+
+      // Skip hidden files/directories
+      if (hiddenPattern.test(entry.name)) continue
+
+      if (entry.isDirectory()) {
+        readDirectoryRecursive(fullPath, basePath)
+      } else if (entry.isFile() && supportedExtensions.test(entry.name)) {
+        const stat = fs.statSync(fullPath)
+        const mimeType = getMimeType(fullPath)
+        let content: string
+
+        if (isTextMime(mimeType)) {
+          content = fs.readFileSync(fullPath, 'utf-8')
+        } else {
+          const buffer = fs.readFileSync(fullPath)
+          content = `data:${mimeType};base64,${buffer.toString('base64')}`
+        }
+
+        files.push({
+          filename: entry.name,
+          relativePath: relPath,
+          content,
+          mimeType,
+          fileSize: stat.size
+        })
+      }
+    }
+  }
+
+  readDirectoryRecursive(dirPath, dirPath)
+  return files
 })
 
 // IPC Handlers for AI Learning Notes
@@ -412,6 +492,14 @@ ipcMain.handle('aiNotes:delete', (_event, id: string) => {
 // IPC Handler for LLM process status
 ipcMain.handle('llm:getProcessStatus', (_event, taskId: string) => {
   return getProcessStatus(taskId)
+})
+
+// IPC Handler for opening working folder in Finder
+ipcMain.handle('shell:openWorkingFolder', async (_event, taskId: string) => {
+  const folder = getWorkingFolder(taskId)
+  if (fs.existsSync(folder)) {
+    await shell.openPath(folder)
+  }
 })
 
 // IPC Handler for Feedback

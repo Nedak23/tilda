@@ -87,7 +87,6 @@ function groupTasksByDate(tasks: Task[], dateField: 'dateToWorkOn' | 'completion
 export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSelection, editingTaskId, onEditingTaskIdChange, onSaveAndCreateNew }: TaskListProps) {
   const {
     currentView,
-    setActiveTask,
     getTodayTasks,
     getUpcomingTasks,
     getArchivedTasks,
@@ -201,7 +200,6 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
                 isEditing={editingTaskId === task.id}
                 onStartEdit={() => onEditingTaskIdChange(task.id)}
                 onCloseEdit={() => onEditingTaskIdChange(null)}
-                onExpandChat={() => setActiveTask(task.id)}
                 onSaveAndCreateNew={onSaveAndCreateNew}
                 onStartWorking={() => startWorking(task.id)}
                 showStartWorking
@@ -273,8 +271,7 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
                     isEditing={editingTaskId === task.id}
                     onStartEdit={() => onEditingTaskIdChange(task.id)}
                     onCloseEdit={() => onEditingTaskIdChange(null)}
-                    onExpandChat={() => setActiveTask(task.id)}
-                    onSaveAndCreateNew={onSaveAndCreateNew}
+                        onSaveAndCreateNew={onSaveAndCreateNew}
                     onStartWorking={() => startWorking(task.id)}
                     showStartWorking
                   />
@@ -339,8 +336,7 @@ export function TaskList({ onCreateTask, selectedTaskIds, onTaskClick, onClearSe
                   isEditing={editingTaskId === task.id}
                   onStartEdit={() => onEditingTaskIdChange(task.id)}
                   onCloseEdit={() => onEditingTaskIdChange(null)}
-                  onExpandChat={() => setActiveTask(task.id)}
-                  onSaveAndCreateNew={onSaveAndCreateNew}
+                    onSaveAndCreateNew={onSaveAndCreateNew}
                 />
               ))}
             </div>

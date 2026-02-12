@@ -224,6 +224,7 @@ function TildaChatMessage({ message, attachments = [], isStreaming = false, onRe
 
 export function TildaSidebar({ isOpen }: TildaSidebarProps) {
   const [input, setInput] = useState('')
+  const [showAttachMenu, setShowAttachMenu] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -240,6 +241,7 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
     sendTildaMessage,
     clearTildaHistory,
     addTildaAttachment,
+    addTildaAttachmentFromData,
     removeTildaAttachment,
     retryTildaMessage,
     editAndResendTildaMessage
@@ -312,6 +314,15 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
     }
 
     e.target.value = ''
+  }
+
+  const handleDirectorySelect = async () => {
+    const files = await window.api.dialog.selectDirectory()
+    if (!files) return
+
+    for (const file of files) {
+      await addTildaAttachmentFromData(file)
+    }
   }
 
   return (
@@ -405,15 +416,45 @@ export function TildaSidebar({ isOpen }: TildaSidebarProps) {
       <div className={`flex-shrink-0 px-3 h-12 flex items-center ${pendingTildaAttachments.length === 0 ? 'border-t border-border-light' : ''}`}>
         <div className="flex items-center gap-2 w-full">
           {/* Attach button */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="p-1.5 text-text-tertiary hover:text-text-secondary rounded-lg transition-colors"
-            title="Attach file"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-            </svg>
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowAttachMenu(!showAttachMenu)}
+              className="p-1.5 text-text-tertiary hover:text-text-secondary rounded-lg transition-colors"
+              title="Attach"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+              </svg>
+            </button>
+            {showAttachMenu && (
+              <div className="absolute left-0 bottom-full mb-1 bg-surface-tertiary rounded-lg shadow-elevated p-1 z-20 w-36">
+                <button
+                  onClick={() => {
+                    fileInputRef.current?.click()
+                    setShowAttachMenu(false)
+                  }}
+                  className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-text hover:bg-surface rounded transition-colors"
+                >
+                  <svg className="w-4 h-4 text-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                  </svg>
+                  Files
+                </button>
+                <button
+                  onClick={() => {
+                    handleDirectorySelect()
+                    setShowAttachMenu(false)
+                  }}
+                  className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-text hover:bg-surface rounded transition-colors"
+                >
+                  <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z" />
+                  </svg>
+                  Folder
+                </button>
+              </div>
+            )}
+          </div>
           <input
             ref={fileInputRef}
             type="file"

@@ -43,6 +43,7 @@ export interface Message {
   sender: MessageSender
   content: string
   timestamp: string
+  attachmentIds?: string[]
 }
 
 export interface Attachment {
@@ -52,6 +53,16 @@ export interface Attachment {
   content: string
   mimeType: string
   createdAt: string
+  relativePath?: string
+}
+
+export interface FileTreeItem {
+  id: string
+  filename: string
+  content: string
+  mimeType: string
+  fileSize?: number
+  relativePath?: string
 }
 
 export type ViewType = 'today' | 'upcoming' | 'archive' | `context:${string}`
@@ -86,12 +97,13 @@ export interface TasksAPI {
   delete: (id: string) => Promise<void>
   reorder: (id: string, newPosition: number) => Promise<void>
   clearUnread: (id: string) => Promise<void>
+  setActive: (id: string | null) => void
   migrateTasks: () => Promise<void>
 }
 
 export interface MessagesAPI {
   getByTask: (taskId: string) => Promise<Message[]>
-  create: (taskId: string, content: string, sender: MessageSender) => Promise<Message>
+  create: (taskId: string, content: string, sender: MessageSender, attachmentIds?: string[]) => Promise<Message>
   delete: (id: string) => Promise<void>
   deleteFromId: (taskId: string, messageId: string) => Promise<void>
   update: (id: string, content: string) => Promise<void>
@@ -99,7 +111,8 @@ export interface MessagesAPI {
 
 export interface AttachmentsAPI {
   getByTask: (taskId: string) => Promise<Attachment[]>
-  create: (taskId: string, filename: string, content: string, mimeType: string) => Promise<Attachment>
+  getPending: (taskId: string) => Promise<Attachment[]>
+  create: (taskId: string, filename: string, content: string, mimeType: string, relativePath?: string) => Promise<Attachment>
   delete: (id: string) => Promise<void>
 }
 
@@ -107,7 +120,8 @@ export interface LLMAPI {
   sendMessage: (
     taskId: string,
     userMessage: string,
-    onChunk: (chunk: string) => void
+    onChunk: (chunk: string) => void,
+    attachmentIds?: string[]
   ) => Promise<string>
   regenerateResponse: (
     taskId: string,
@@ -135,12 +149,13 @@ export interface TildaAttachment {
   content: string
   mimeType: string
   createdAt: string
+  relativePath?: string
 }
 
 export interface TildaAttachmentsAPI {
   getAll: () => Promise<TildaAttachment[]>
   getPending: () => Promise<TildaAttachment[]>
-  create: (filename: string, content: string, mimeType: string) => Promise<TildaAttachment>
+  create: (filename: string, content: string, mimeType: string, relativePath?: string) => Promise<TildaAttachment>
   delete: (id: string) => Promise<void>
   clear: () => Promise<void>
 }
@@ -178,6 +193,7 @@ export interface ContextDocument {
   mimeType: string
   fileSize: number
   createdAt: string
+  relativePath?: string
 }
 
 export interface CreateContextInput {
@@ -204,7 +220,7 @@ export interface ContextsAPI {
 
 export interface ContextDocumentsAPI {
   getByContext: (contextId: string) => Promise<ContextDocument[]>
-  create: (contextId: string, filename: string, content: string, mimeType: string, fileSize: number) => Promise<ContextDocument>
+  create: (contextId: string, filename: string, content: string, mimeType: string, fileSize: number, relativePath?: string) => Promise<ContextDocument>
   delete: (id: string) => Promise<void>
 }
 
@@ -268,6 +284,19 @@ export interface UpdaterAPI {
   onUpdateReady: (callback: () => void) => () => void
 }
 
+// Directory upload types
+export interface DirectoryFile {
+  filename: string
+  relativePath: string
+  content: string
+  mimeType: string
+  fileSize: number
+}
+
+export interface DialogAPI {
+  selectDirectory: () => Promise<DirectoryFile[] | null>
+}
+
 // Feedback types
 export interface FeedbackInput {
   message: string
@@ -276,6 +305,10 @@ export interface FeedbackInput {
 
 export interface FeedbackAPI {
   send: (input: FeedbackInput) => Promise<{ success: boolean; error?: string }>
+}
+
+export interface ShellAPI {
+  openWorkingFolder: (taskId: string) => Promise<void>
 }
 
 export interface ElectronAPI {
@@ -291,6 +324,8 @@ export interface ElectronAPI {
   aiNotes: AINotesAPI
   updater: UpdaterAPI
   feedback: FeedbackAPI
+  dialog: DialogAPI
+  shell: ShellAPI
 }
 
 declare global {

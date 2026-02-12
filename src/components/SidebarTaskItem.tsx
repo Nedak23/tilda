@@ -46,7 +46,7 @@ export function SidebarTaskItem({ task, isActive, onSelect, onComplete, onUnstar
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect() } }}
       className={`
-        group/task w-full flex items-center gap-2 pl-7 pr-2 py-1 rounded-md text-left cursor-pointer
+        group/task w-full flex items-center gap-2 pl-4 pr-2 py-1 rounded-md text-left cursor-pointer
         transition-colors duration-100 titlebar-no-drag
         ${isActive
           ? 'bg-surface-tertiary text-text'
@@ -55,6 +55,13 @@ export function SidebarTaskItem({ task, isActive, onSelect, onComplete, onUnstar
         ${isCompleting ? 'animate-complete-out' : ''}
       `}
     >
+      {/* Unread blue dot - to the left of checkbox */}
+      {task.hasUnreadAgentMessage ? (
+        <span className="w-1.5 h-1.5 rounded-full bg-accent-blue animate-pulse-dot flex-shrink-0" />
+      ) : (
+        <span className="w-1.5 h-1.5 flex-shrink-0" />
+      )}
+
       {/* Checkbox */}
       {!isCompleting ? (
         <button
@@ -82,11 +89,6 @@ export function SidebarTaskItem({ task, isActive, onSelect, onComplete, onUnstar
 
       {/* Task name */}
       <span className="text-xs truncate flex-1">{task.name}</span>
-
-      {/* Unread blue dot */}
-      {task.hasUnreadAgentMessage && (
-        <span className="w-1.5 h-1.5 rounded-full bg-accent-blue animate-pulse-dot flex-shrink-0" />
-      )}
 
       {/* Un-start button on hover */}
       <button

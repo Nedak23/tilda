@@ -15,7 +15,6 @@ interface SortableTaskItemProps {
   isEditing?: boolean
   onStartEdit?: () => void
   onCloseEdit?: () => void
-  onExpandChat?: () => void
   onSaveAndCreateNew?: () => void
   onStartWorking?: () => void
   showStartWorking?: boolean
@@ -33,7 +32,6 @@ export function SortableTaskItem({
   isEditing,
   onStartEdit,
   onCloseEdit,
-  onExpandChat,
   onSaveAndCreateNew,
   onStartWorking,
   showStartWorking
@@ -90,7 +88,6 @@ export function SortableTaskItem({
         isEditing={isEditing}
         onStartEdit={onStartEdit}
         onCloseEdit={onCloseEdit}
-        onExpandChat={onExpandChat}
         onSaveAndCreateNew={onSaveAndCreateNew}
         onStartWorking={onStartWorking}
         showStartWorking={showStartWorking}
