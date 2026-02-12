@@ -475,15 +475,16 @@ function App() {
         isNavCollapsed={isNavCollapsed}
         onToggleTilda={toggleTilda}
         onToggleNav={toggleNav}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenFeedback={() => setIsFeedbackOpen(true)}
       />
 
       {/* Main layout with resizable panels */}
       <div className="flex-1 min-h-0 flex">
         <PanelLayout
           leftPanel={
-            <Sidebar />
+            <Sidebar
+              onOpenSettings={() => setIsSettingsOpen(true)}
+              onOpenFeedback={() => setIsFeedbackOpen(true)}
+            />
           }
           centerPanel={mainContent}
           rightPanel={

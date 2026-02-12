@@ -28,13 +28,23 @@ const api: ElectronAPI = {
   },
   messages: {
     getByTask: (taskId: string) => ipcRenderer.invoke('messages:getByTask', taskId),
-    create: (taskId: string, content: string, sender: MessageSender, attachmentIds?: string[]) =>
-      ipcRenderer.invoke('messages:create', taskId, content, sender, attachmentIds),
+    getByChat: (chatId: string) => ipcRenderer.invoke('messages:getByChat', chatId),
+    create: (taskId: string, content: string, sender: MessageSender, attachmentIds?: string[], chatId?: string) =>
+      ipcRenderer.invoke('messages:create', taskId, content, sender, attachmentIds, chatId),
     delete: (id: string) => ipcRenderer.invoke('messages:delete', id),
     deleteFromId: (taskId: string, messageId: string) =>
       ipcRenderer.invoke('messages:deleteFromId', taskId, messageId),
+    deleteFromChatId: (chatId: string, messageId: string) =>
+      ipcRenderer.invoke('messages:deleteFromChatId', chatId, messageId),
     update: (id: string, content: string) =>
       ipcRenderer.invoke('messages:update', id, content)
+  },
+  chats: {
+    getByTask: (taskId: string) => ipcRenderer.invoke('chats:getByTask', taskId),
+    create: (taskId: string, name: string) => ipcRenderer.invoke('chats:create', taskId, name),
+    updateName: (id: string, name: string) => ipcRenderer.invoke('chats:updateName', id, name),
+    delete: (id: string) => ipcRenderer.invoke('chats:delete', id),
+    ensureDefault: (taskId: string) => ipcRenderer.invoke('chats:ensureDefault', taskId)
   },
   attachments: {
     getByTask: (taskId: string) => ipcRenderer.invoke('attachments:getByTask', taskId),
@@ -44,33 +54,33 @@ const api: ElectronAPI = {
     delete: (id: string) => ipcRenderer.invoke('attachments:delete', id)
   },
   llm: {
-    sendMessage: (taskId: string, userMessage: string, onChunk: (chunk: string) => void, attachmentIds?: string[]) => {
+    sendMessage: (taskId: string, chatId: string, userMessage: string, onChunk: (chunk: string) => void, attachmentIds?: string[]) => {
       // Create a unique channel for this request
-      const channel = `llm:chunk:${taskId}:${Date.now()}`
+      const channel = `llm:chunk:${chatId}:${Date.now()}`
 
       // Set up listener for chunks
       const listener = (_event: unknown, chunk: string) => onChunk(chunk)
       ipcRenderer.on(channel, listener)
 
       // Send the request
-      return ipcRenderer.invoke('llm:sendMessage', taskId, userMessage, channel, attachmentIds).finally(() => {
+      return ipcRenderer.invoke('llm:sendMessage', taskId, chatId, userMessage, channel, attachmentIds).finally(() => {
         ipcRenderer.removeListener(channel, listener)
       })
     },
-    regenerateResponse: (taskId: string, onChunk: (chunk: string) => void) => {
+    regenerateResponse: (taskId: string, chatId: string, onChunk: (chunk: string) => void) => {
       // Create a unique channel for this request
-      const channel = `llm:chunk:${taskId}:${Date.now()}`
+      const channel = `llm:chunk:${chatId}:${Date.now()}`
 
       // Set up listener for chunks
       const listener = (_event: unknown, chunk: string) => onChunk(chunk)
       ipcRenderer.on(channel, listener)
 
       // Send the request
-      return ipcRenderer.invoke('llm:regenerateResponse', taskId, channel).finally(() => {
+      return ipcRenderer.invoke('llm:regenerateResponse', taskId, chatId, channel).finally(() => {
         ipcRenderer.removeListener(channel, listener)
       })
     },
-    cancelRequest: (taskId: string) => ipcRenderer.send('llm:cancel', taskId)
+    cancelRequest: (chatId: string) => ipcRenderer.send('llm:cancel', chatId)
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),

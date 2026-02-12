@@ -20,15 +20,22 @@ import {
   clearUnreadAgentMessage,
   migrateTasksToToday,
   getMessagesByTask,
+  getMessagesByChat,
   createMessage,
   deleteMessage,
   deleteMessagesFromId,
+  deleteMessagesFromChatId,
   updateMessageContent,
   getAttachmentsByTask,
   getPendingTaskAttachments,
   createAttachment,
   deleteAttachment,
   setUnreadAgentMessage,
+  getChatsByTask,
+  createChat,
+  updateChatName,
+  deleteChat,
+  ensureDefaultChat,
   getTildaMessages,
   clearTildaMessages,
   deleteTildaMessage,
@@ -180,8 +187,12 @@ ipcMain.handle('messages:getByTask', (_event, taskId: string) => {
   return getMessagesByTask(taskId)
 })
 
-ipcMain.handle('messages:create', (_event, taskId: string, content: string, sender: MessageSender, attachmentIds?: string[]) => {
-  return createMessage(taskId, content, sender, attachmentIds)
+ipcMain.handle('messages:getByChat', (_event, chatId: string) => {
+  return getMessagesByChat(chatId)
+})
+
+ipcMain.handle('messages:create', (_event, taskId: string, content: string, sender: MessageSender, attachmentIds?: string[], chatId?: string) => {
+  return createMessage(taskId, content, sender, attachmentIds, chatId)
 })
 
 ipcMain.handle('messages:delete', (_event, id: string) => {
@@ -192,8 +203,33 @@ ipcMain.handle('messages:deleteFromId', (_event, taskId: string, messageId: stri
   deleteMessagesFromId(taskId, messageId)
 })
 
+ipcMain.handle('messages:deleteFromChatId', (_event, chatId: string, messageId: string) => {
+  deleteMessagesFromChatId(chatId, messageId)
+})
+
 ipcMain.handle('messages:update', (_event, id: string, content: string) => {
   updateMessageContent(id, content)
+})
+
+// IPC Handlers for Chats
+ipcMain.handle('chats:getByTask', (_event, taskId: string) => {
+  return getChatsByTask(taskId)
+})
+
+ipcMain.handle('chats:create', (_event, taskId: string, name: string) => {
+  return createChat(taskId, name)
+})
+
+ipcMain.handle('chats:updateName', (_event, id: string, name: string) => {
+  updateChatName(id, name)
+})
+
+ipcMain.handle('chats:delete', (_event, id: string) => {
+  deleteChat(id)
+})
+
+ipcMain.handle('chats:ensureDefault', (_event, taskId: string) => {
+  return ensureDefaultChat(taskId)
 })
 
 // IPC Handlers for Attachments
@@ -217,9 +253,9 @@ ipcMain.handle('attachments:delete', (_event, id: string) => {
 // Track which task the user is currently viewing
 let activeTaskId: string | null = null
 
-ipcMain.handle('llm:sendMessage', async (event, taskId: string, userMessage: string, channel: string, attachmentIds?: string[]) => {
+ipcMain.handle('llm:sendMessage', async (event, taskId: string, chatId: string, userMessage: string, channel: string, attachmentIds?: string[]) => {
   try {
-    const response = await sendMessage(taskId, userMessage, (chunk: string) => {
+    const response = await sendMessage(taskId, chatId, userMessage, (chunk: string) => {
       event.sender.send(channel, chunk)
     }, attachmentIds)
 
@@ -234,13 +270,13 @@ ipcMain.handle('llm:sendMessage', async (event, taskId: string, userMessage: str
   }
 })
 
-ipcMain.on('llm:cancel', (_event, taskId: string) => {
-  cancelRequest(taskId)
+ipcMain.on('llm:cancel', (_event, chatId: string) => {
+  cancelRequest(chatId)
 })
 
-ipcMain.handle('llm:regenerateResponse', async (event, taskId: string, channel: string) => {
+ipcMain.handle('llm:regenerateResponse', async (event, taskId: string, chatId: string, channel: string) => {
   try {
-    const response = await regenerateResponse(taskId, (chunk: string) => {
+    const response = await regenerateResponse(taskId, chatId, (chunk: string) => {
       event.sender.send(channel, chunk)
     })
 

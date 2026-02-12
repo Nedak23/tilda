@@ -44,6 +44,16 @@ export interface Message {
   content: string
   timestamp: string
   attachmentIds?: string[]
+  chatId?: string
+}
+
+export interface Chat {
+  id: string
+  taskId: string
+  name: string
+  sortPosition: number
+  claudeSessionId?: string
+  createdAt: string
 }
 
 export interface Attachment {
@@ -103,10 +113,20 @@ export interface TasksAPI {
 
 export interface MessagesAPI {
   getByTask: (taskId: string) => Promise<Message[]>
-  create: (taskId: string, content: string, sender: MessageSender, attachmentIds?: string[]) => Promise<Message>
+  getByChat: (chatId: string) => Promise<Message[]>
+  create: (taskId: string, content: string, sender: MessageSender, attachmentIds?: string[], chatId?: string) => Promise<Message>
   delete: (id: string) => Promise<void>
   deleteFromId: (taskId: string, messageId: string) => Promise<void>
+  deleteFromChatId: (chatId: string, messageId: string) => Promise<void>
   update: (id: string, content: string) => Promise<void>
+}
+
+export interface ChatsAPI {
+  getByTask: (taskId: string) => Promise<Chat[]>
+  create: (taskId: string, name: string) => Promise<Chat>
+  updateName: (id: string, name: string) => Promise<void>
+  delete: (id: string) => Promise<void>
+  ensureDefault: (taskId: string) => Promise<Chat>
 }
 
 export interface AttachmentsAPI {
@@ -119,15 +139,17 @@ export interface AttachmentsAPI {
 export interface LLMAPI {
   sendMessage: (
     taskId: string,
+    chatId: string,
     userMessage: string,
     onChunk: (chunk: string) => void,
     attachmentIds?: string[]
   ) => Promise<string>
   regenerateResponse: (
     taskId: string,
+    chatId: string,
     onChunk: (chunk: string) => void
   ) => Promise<string>
-  cancelRequest: (taskId: string) => void
+  cancelRequest: (chatId: string) => void
 }
 
 export interface SettingsAPI {
@@ -314,6 +336,7 @@ export interface ShellAPI {
 export interface ElectronAPI {
   tasks: TasksAPI
   messages: MessagesAPI
+  chats: ChatsAPI
   attachments: AttachmentsAPI
   llm: LLMAPI
   settings: SettingsAPI

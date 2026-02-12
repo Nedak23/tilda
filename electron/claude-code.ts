@@ -13,7 +13,9 @@ import {
   getAttachmentsByTask,
   createContextDocument,
   createAILearningNote,
-  setTaskClaudeSessionId,
+  setChatClaudeSessionId,
+  getChatById,
+  getChatsByTask,
   GENERAL_CONTEXT_ID
 } from './database'
 import type { Task, Context, ContextDocument, AILearningNote, AILearningNoteCategory } from '../src/types'
@@ -59,8 +61,9 @@ function getClaudePath(): string {
   return cachedClaudePath
 }
 
-// Process registry
+// Process registry (keyed by chatId)
 interface ClaudeCodeProcess {
+  chatId: string
   taskId: string
   process: ChildProcess
   workingFolder: string
@@ -334,6 +337,7 @@ function extractJson(text: string): ExtractedJson | null {
 
 // Send a message to Claude Code using the same approach as Conductor
 export async function sendMessage(
+  chatId: string,
   taskId: string,
   message: string,
   onChunk: (chunk: string) => void
@@ -342,10 +346,10 @@ export async function sendMessage(
   const workingFolder = await initializeWorkingFolder(taskId)
 
   // Check if we have an existing session to resume
-  // First check in-memory registry, then fall back to database
-  const existing = processRegistry.get(taskId)
-  const task = getTaskById(taskId)
-  const sessionId = existing?.sessionId || task?.claudeSessionId || null
+  // First check in-memory registry, then fall back to chat's stored session ID
+  const existing = processRegistry.get(chatId)
+  const chat = getChatById(chatId)
+  const sessionId = existing?.sessionId || chat?.claudeSessionId || null
 
   // Get the Claude CLI path
   const claudePath = getClaudePath()
@@ -365,7 +369,7 @@ export async function sendMessage(
     args.push('--resume', sessionId)
   }
 
-  logger.log(`Spawning Claude Code for task ${taskId}`)
+  logger.log(`Spawning Claude Code for chat ${chatId} (task ${taskId})`)
   logger.log(`Args: ${args.join(' ')}`)
   logger.log(`Working folder: ${workingFolder}`)
 
@@ -378,7 +382,8 @@ export async function sendMessage(
   logger.log(`Claude Code process spawned with PID: ${proc.pid}`)
 
   // Register process immediately so it can be killed during execution
-  processRegistry.set(taskId, {
+  processRegistry.set(chatId, {
+    chatId,
     taskId,
     process: proc,
     workingFolder,
@@ -400,7 +405,7 @@ export async function sendMessage(
 
     // Check if process was killed
     const checkCancelled = () => {
-      if (!processRegistry.has(taskId)) {
+      if (!processRegistry.has(chatId)) {
         cancelled = true
         return true
       }
@@ -439,7 +444,7 @@ export async function sendMessage(
           if (parsed.type === 'system' && parsed.session_id) {
             capturedSessionId = parsed.session_id
             // Update registry with session ID
-            const entry = processRegistry.get(taskId)
+            const entry = processRegistry.get(chatId)
             if (entry) {
               entry.sessionId = capturedSessionId
             }
@@ -460,14 +465,14 @@ export async function sendMessage(
           } else if (parsed.type === 'result') {
             clearTimeout(timeoutId)
             // Update registry: mark as not processing, keep session for future use
-            const entry = processRegistry.get(taskId)
+            const entry = processRegistry.get(chatId)
             if (entry) {
               entry.isProcessing = false
               entry.sessionId = capturedSessionId
             }
-            // Persist session ID to database for app restart recovery
+            // Persist session ID to chat record for app restart recovery
             if (capturedSessionId) {
-              setTaskClaudeSessionId(taskId, capturedSessionId)
+              setChatClaudeSessionId(chatId, capturedSessionId)
             }
             if (!resolved) {
               resolved = true
@@ -537,9 +542,9 @@ export async function sendMessage(
   })
 }
 
-// Kill a Claude Code process (clears session info)
-export function killProcess(taskId: string): void {
-  const ccProcess = processRegistry.get(taskId)
+// Kill a Claude Code process by chatId (clears session info)
+export function killProcess(chatId: string): void {
+  const ccProcess = processRegistry.get(chatId)
   if (ccProcess) {
     // Try to kill if process is still running
     try {
@@ -547,13 +552,27 @@ export function killProcess(taskId: string): void {
     } catch {
       // Process may already be dead
     }
-    processRegistry.delete(taskId)
+    processRegistry.delete(chatId)
   }
 }
 
-// Get process status
-export function getProcessStatus(taskId: string): 'idle' | 'processing' | 'not_running' {
-  const ccProcess = processRegistry.get(taskId)
+// Kill all processes for a given task (across all chats)
+export function killProcessesForTask(taskId: string): void {
+  for (const [chatId, ccProcess] of processRegistry) {
+    if (ccProcess.taskId === taskId) {
+      try {
+        ccProcess.process.kill('SIGTERM')
+      } catch {
+        // Process may already be dead
+      }
+      processRegistry.delete(chatId)
+    }
+  }
+}
+
+// Get process status by chatId
+export function getProcessStatus(chatId: string): 'idle' | 'processing' | 'not_running' {
+  const ccProcess = processRegistry.get(chatId)
   if (!ccProcess) {
     return 'not_running'
   }
@@ -567,11 +586,14 @@ export async function extractAndCleanup(taskId: string): Promise<void> {
 
   const workingFolder = getWorkingFolder(taskId)
 
-  // Kill process if running
-  killProcess(taskId)
+  // Kill all processes for this task (across all chats)
+  killProcessesForTask(taskId)
 
-  // Clear session ID since we're cleaning up
-  setTaskClaudeSessionId(taskId, null)
+  // Clear session IDs on all chats for this task
+  const chats = getChatsByTask(taskId)
+  for (const chat of chats) {
+    setChatClaudeSessionId(chat.id, null)
+  }
 
   // Check if working folder exists
   if (!existsSync(workingFolder)) {
