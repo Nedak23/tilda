@@ -157,47 +157,6 @@ export interface SettingsAPI {
   save: (settings: Settings) => Promise<void>
 }
 
-export interface TildaMessage {
-  id: string
-  sender: MessageSender
-  content: string
-  timestamp: string
-  attachmentIds?: string[]
-}
-
-export interface TildaAttachment {
-  id: string
-  filename: string
-  content: string
-  mimeType: string
-  createdAt: string
-  relativePath?: string
-}
-
-export interface TildaAttachmentsAPI {
-  getAll: () => Promise<TildaAttachment[]>
-  getPending: () => Promise<TildaAttachment[]>
-  create: (filename: string, content: string, mimeType: string, relativePath?: string) => Promise<TildaAttachment>
-  delete: (id: string) => Promise<void>
-  clear: () => Promise<void>
-}
-
-export interface TildaAPI {
-  getMessages: () => Promise<TildaMessage[]>
-  sendMessage: (
-    userMessage: string,
-    onChunk: (chunk: string) => void
-  ) => Promise<string>
-  regenerateResponse: (
-    onChunk: (chunk: string) => void
-  ) => Promise<string>
-  cancelRequest: () => void
-  clearHistory: () => Promise<void>
-  deleteMessage: (id: string) => Promise<void>
-  deleteMessagesFromId: (messageId: string) => Promise<void>
-  updateMessage: (id: string, content: string) => Promise<void>
-}
-
 // Context types
 export interface Context {
   id: string
@@ -329,8 +288,17 @@ export interface FeedbackAPI {
   send: (input: FeedbackInput) => Promise<{ success: boolean; error?: string }>
 }
 
+export interface WorkingFolderEntry {
+  name: string
+  relativePath: string
+  isDirectory: boolean
+  size?: number
+  mimeType?: string
+}
+
 export interface ShellAPI {
   openWorkingFolder: (taskId: string) => Promise<void>
+  listWorkingFolder: (taskId: string) => Promise<WorkingFolderEntry[]>
 }
 
 export interface ElectronAPI {
@@ -340,8 +308,6 @@ export interface ElectronAPI {
   attachments: AttachmentsAPI
   llm: LLMAPI
   settings: SettingsAPI
-  tilda: TildaAPI
-  tildaAttachments: TildaAttachmentsAPI
   contexts: ContextsAPI
   contextDocuments: ContextDocumentsAPI
   aiNotes: AINotesAPI

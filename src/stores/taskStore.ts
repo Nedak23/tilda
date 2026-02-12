@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import type { Task, Message, Attachment, Chat, ViewType, CreateTaskInput, UpdateTaskInput, TildaMessage, TildaAttachment, Context, ContextDocument, CreateContextInput, UpdateContextInput, AILearningNote, UpdateAILearningNoteInput, DirectoryFile } from '../types'
 import { GENERAL_CONTEXT_ID } from '../types'
 import { readFileContent, getFileMimeType } from '../utils/fileUtils'
-import { logger } from '../utils/logger'
 
 interface TaskStore {
   // State
@@ -27,13 +26,6 @@ interface TaskStore {
 
   // Pending responses (keyed by chatId)
   pendingResponses: Set<string>
-
-  // Tilda state
-  tildaMessages: TildaMessage[]
-  tildaAttachments: TildaAttachment[]  // All attachments (for message display lookup)
-  pendingTildaAttachments: TildaAttachment[]  // Pending attachments (for input area)
-  isTildaPending: boolean
-  tildaStreamingContent: string
 
   // Context state
   contexts: Context[]
@@ -91,18 +83,6 @@ interface TaskStore {
   getUpcomingTasks: () => Task[]
   getArchivedTasks: () => Task[]
 
-  // Tilda actions
-  loadTildaMessages: () => Promise<void>
-  sendTildaMessage: (content: string) => Promise<void>
-  clearTildaHistory: () => Promise<void>
-  loadTildaAttachments: () => Promise<void>
-  loadPendingTildaAttachments: () => Promise<void>
-  addTildaAttachment: (file: File) => Promise<void>
-  addTildaAttachmentFromData: (data: DirectoryFile) => Promise<void>
-  removeTildaAttachment: (id: string) => Promise<void>
-  retryTildaMessage: (messageId: string) => Promise<void>
-  editAndResendTildaMessage: (messageId: string, newContent: string) => Promise<void>
-
   // Context actions
   loadContexts: () => Promise<void>
   createContext: (input: CreateContextInput) => Promise<Context>
@@ -149,11 +129,6 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   activeChatIdByTask: {},
   messagesByChat: {},
   pendingResponses: new Set(),
-  tildaMessages: [],
-  tildaAttachments: [],
-  pendingTildaAttachments: [],
-  isTildaPending: false,
-  tildaStreamingContent: '',
   contexts: [],
   contextDocumentsByContext: {},
   aiNotesByContext: {},
@@ -987,263 +962,6 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     return get()
       .tasks.filter(t => t.status === 'archived')
       .sort((a, b) => (b.completionDate || '').localeCompare(a.completionDate || ''))
-  },
-
-  // Tilda actions
-  loadTildaMessages: async () => {
-    try {
-      const messages = await window.api.tilda.getMessages()
-      set({ tildaMessages: messages })
-    } catch (error) {
-      set({ error: (error as Error).message })
-    }
-  },
-
-  sendTildaMessage: async (content) => {
-    set({ isTildaPending: true, tildaStreamingContent: '' })
-
-    // Capture current pending attachments before sending (they will be linked to the message)
-    const currentAttachments = get().pendingTildaAttachments
-    const attachmentIds = currentAttachments.map(a => a.id)
-
-    // Optimistically add user message with attachment IDs
-    const tempUserMessage: TildaMessage = {
-      id: `temp-${Date.now()}`,
-      sender: 'user',
-      content,
-      timestamp: new Date().toISOString(),
-      attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined
-    }
-
-    set(state => ({
-      tildaMessages: [...state.tildaMessages, tempUserMessage],
-      // Clear pending attachments optimistically since they're now part of the message
-      pendingTildaAttachments: []
-      // Note: currentAttachments are already in tildaAttachments from addTildaAttachment,
-      // so no need to add them again here
-    }))
-
-    // Track streaming response
-    let streamedContent = ''
-
-    try {
-      await window.api.tilda.sendMessage(content, (chunk) => {
-        streamedContent += chunk
-        set({ tildaStreamingContent: streamedContent })
-      })
-
-      // Reload messages and attachments to get persisted versions, refresh tasks (tools may have modified them)
-      await get().loadTildaMessages()
-      await get().loadTildaAttachments()
-      await get().loadPendingTildaAttachments()
-      await get().loadTasks()
-    } catch (error) {
-      const errorMessage = (error as Error).message
-      set({ error: errorMessage })
-
-      // Show error as a message
-      const errorDisplayMessage: TildaMessage = {
-        id: crypto.randomUUID(),
-        sender: 'agent',
-        content: `Error: ${errorMessage}`,
-        timestamp: new Date().toISOString()
-      }
-
-      set(state => ({
-        tildaMessages: [...state.tildaMessages, errorDisplayMessage]
-      }))
-    } finally {
-      set({ isTildaPending: false, tildaStreamingContent: '' })
-    }
-  },
-
-  clearTildaHistory: async () => {
-    try {
-      await window.api.tilda.clearHistory()
-      set({ tildaMessages: [], tildaAttachments: [], pendingTildaAttachments: [] })
-    } catch (error) {
-      logger.error('Failed to clear Tilda history:', error)
-      set({ error: (error as Error).message })
-    }
-  },
-
-  loadTildaAttachments: async () => {
-    try {
-      const attachments = await window.api.tildaAttachments.getAll()
-      set({ tildaAttachments: attachments })
-    } catch (error) {
-      set({ error: (error as Error).message })
-    }
-  },
-
-  loadPendingTildaAttachments: async () => {
-    try {
-      const attachments = await window.api.tildaAttachments.getPending()
-      set({ pendingTildaAttachments: attachments })
-    } catch (error) {
-      set({ error: (error as Error).message })
-    }
-  },
-
-  addTildaAttachment: async (file) => {
-    try {
-      const content = await readFileContent(file)
-      const mimeType = getFileMimeType(file)
-
-      const attachment = await window.api.tildaAttachments.create(
-        file.name,
-        content,
-        mimeType
-      )
-      set(state => ({
-        // Add to both: all attachments (for lookup) and pending (for input area)
-        tildaAttachments: [...state.tildaAttachments, attachment],
-        pendingTildaAttachments: [...state.pendingTildaAttachments, attachment]
-      }))
-    } catch (error) {
-      set({ error: (error as Error).message })
-      throw error
-    }
-  },
-
-  addTildaAttachmentFromData: async (data) => {
-    try {
-      const attachment = await window.api.tildaAttachments.create(
-        data.filename,
-        data.content,
-        data.mimeType,
-        data.relativePath
-      )
-      set(state => ({
-        tildaAttachments: [...state.tildaAttachments, attachment],
-        pendingTildaAttachments: [...state.pendingTildaAttachments, attachment]
-      }))
-    } catch (error) {
-      set({ error: (error as Error).message })
-      throw error
-    }
-  },
-
-  removeTildaAttachment: async (id) => {
-    try {
-      await window.api.tildaAttachments.delete(id)
-      set(state => ({
-        tildaAttachments: state.tildaAttachments.filter(a => a.id !== id),
-        pendingTildaAttachments: state.pendingTildaAttachments.filter(a => a.id !== id)
-      }))
-    } catch (error) {
-      set({ error: (error as Error).message })
-      throw error
-    }
-  },
-
-  retryTildaMessage: async (messageId) => {
-    const messages = get().tildaMessages
-    const messageIndex = messages.findIndex(m => m.id === messageId)
-    if (messageIndex === -1) return
-
-    const message = messages[messageIndex]
-
-    // Only retry LLM messages
-    if (message.sender !== 'agent') return
-
-    // Delete from the LLM message onwards (keeps the user message)
-    await window.api.tilda.deleteMessagesFromId(messageId)
-
-    // Reload messages to reflect deletion
-    await get().loadTildaMessages()
-
-    // Mark as pending
-    set({ isTildaPending: true, tildaStreamingContent: '' })
-
-    // Track streaming response
-    let streamedContent = ''
-
-    try {
-      // Regenerate response without creating a new user message
-      await window.api.tilda.regenerateResponse((chunk) => {
-        streamedContent += chunk
-        set({ tildaStreamingContent: streamedContent })
-      })
-
-      // Reload messages to get persisted versions and refresh tasks (tools may have modified them)
-      await get().loadTildaMessages()
-      await get().loadTasks()
-    } catch (error) {
-      const errorMessage = (error as Error).message
-      set({ error: errorMessage })
-
-      // Show error as a message
-      const errorDisplayMessage: TildaMessage = {
-        id: crypto.randomUUID(),
-        sender: 'agent',
-        content: `Error: ${errorMessage}`,
-        timestamp: new Date().toISOString()
-      }
-
-      set(state => ({
-        tildaMessages: [...state.tildaMessages, errorDisplayMessage]
-      }))
-    } finally {
-      set({ isTildaPending: false, tildaStreamingContent: '' })
-    }
-  },
-
-  editAndResendTildaMessage: async (messageId, newContent) => {
-    const messages = get().tildaMessages
-    const messageIndex = messages.findIndex(m => m.id === messageId)
-    if (messageIndex === -1) return
-
-    const message = messages[messageIndex]
-    if (message.sender !== 'user') return
-
-    // Update the user message content
-    await window.api.tilda.updateMessage(messageId, newContent)
-
-    // Find and delete any messages after this one
-    const nextMessageIndex = messageIndex + 1
-    if (nextMessageIndex < messages.length) {
-      const nextMessage = messages[nextMessageIndex]
-      await window.api.tilda.deleteMessagesFromId(nextMessage.id)
-    }
-
-    // Reload messages to reflect changes
-    await get().loadTildaMessages()
-
-    // Mark as pending
-    set({ isTildaPending: true, tildaStreamingContent: '' })
-
-    // Track streaming response
-    let streamedContent = ''
-
-    try {
-      // Regenerate response without creating a new user message
-      await window.api.tilda.regenerateResponse((chunk) => {
-        streamedContent += chunk
-        set({ tildaStreamingContent: streamedContent })
-      })
-
-      // Reload messages to get persisted versions and refresh tasks (tools may have modified them)
-      await get().loadTildaMessages()
-      await get().loadTasks()
-    } catch (error) {
-      const errorMessage = (error as Error).message
-      set({ error: errorMessage })
-
-      // Show error as a message
-      const errorDisplayMessage: TildaMessage = {
-        id: crypto.randomUUID(),
-        sender: 'agent',
-        content: `Error: ${errorMessage}`,
-        timestamp: new Date().toISOString()
-      }
-
-      set(state => ({
-        tildaMessages: [...state.tildaMessages, errorDisplayMessage]
-      }))
-    } finally {
-      set({ isTildaPending: false, tildaStreamingContent: '' })
-    }
   },
 
   // Context actions
