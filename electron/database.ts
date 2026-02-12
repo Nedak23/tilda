@@ -7,6 +7,7 @@ import {
   type Task,
   type Message,
   type Attachment,
+  type Chat,
   type CreateTaskInput,
   type UpdateTaskInput,
   type MessageSender,
@@ -133,6 +134,18 @@ export function initDatabase(): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_ai_learning_notes_context ON ai_learning_notes(context_id);
+
+    CREATE TABLE IF NOT EXISTS chats (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      sort_position INTEGER NOT NULL DEFAULT 0,
+      claude_session_id TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chats_task ON chats(task_id);
   `)
 
   // Ensure the General context exists
@@ -221,6 +234,35 @@ function runMigrations(): void {
   const tildaAttachmentColumns = db.prepare('PRAGMA table_info(tilda_attachments)').all() as { name: string }[]
   if (!tildaAttachmentColumns.some(col => col.name === 'relative_path')) {
     db.exec('ALTER TABLE tilda_attachments ADD COLUMN relative_path TEXT')
+  }
+
+  // Migration: Add chat_id column to messages and backfill default chats
+  const msgCols = db.prepare('PRAGMA table_info(messages)').all() as { name: string }[]
+  if (!msgCols.some(col => col.name === 'chat_id')) {
+    db.exec('ALTER TABLE messages ADD COLUMN chat_id TEXT REFERENCES chats(id) ON DELETE CASCADE')
+    db.exec('CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id)')
+
+    // Create a default "Chat 1" for every task that has existing messages
+    const tasksWithMessages = db.prepare(
+      'SELECT DISTINCT task_id FROM messages'
+    ).all() as { task_id: string }[]
+
+    const now = new Date().toISOString()
+    const insertChat = db.prepare(`
+      INSERT INTO chats (id, task_id, name, sort_position, claude_session_id, created_at)
+      VALUES (?, ?, ?, 0, ?, ?)
+    `)
+    const updateMessages = db.prepare(
+      'UPDATE messages SET chat_id = ? WHERE task_id = ?'
+    )
+
+    for (const { task_id } of tasksWithMessages) {
+      const chatId = uuidv4()
+      // Copy claude_session_id from task to the default chat
+      const task = db.prepare('SELECT claude_session_id FROM tasks WHERE id = ?').get(task_id) as { claude_session_id: string | null } | undefined
+      insertChat.run(chatId, task_id, 'Chat 1', task?.claude_session_id ?? null, now)
+      updateMessages.run(chatId, task_id)
+    }
   }
 }
 
@@ -589,7 +631,8 @@ function rowToMessage(row: Record<string, unknown>): Message {
     sender: row.sender as MessageSender,
     content: row.content as string,
     timestamp: row.timestamp as string,
-    attachmentIds
+    attachmentIds,
+    chatId: row.chat_id as string | undefined
   }
 }
 
@@ -600,17 +643,17 @@ export function getMessagesByTask(taskId: string): Message[] {
   return rows.map(row => rowToMessage(row as Record<string, unknown>))
 }
 
-export function createMessage(taskId: string, content: string, sender: MessageSender, attachmentIds?: string[]): Message {
+export function createMessage(taskId: string, content: string, sender: MessageSender, attachmentIds?: string[], chatId?: string): Message {
   const id = uuidv4()
   const timestamp = new Date().toISOString()
   const attachmentIdsStr = attachmentIds && attachmentIds.length > 0 ? JSON.stringify(attachmentIds) : null
 
   db.prepare(`
-    INSERT INTO messages (id, task_id, sender, content, timestamp, attachment_ids)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, taskId, sender, content, timestamp, attachmentIdsStr)
+    INSERT INTO messages (id, task_id, sender, content, timestamp, attachment_ids, chat_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, taskId, sender, content, timestamp, attachmentIdsStr, chatId ?? null)
 
-  return { id, taskId, sender, content, timestamp, attachmentIds }
+  return { id, taskId, sender, content, timestamp, attachmentIds, chatId }
 }
 
 export function deleteMessage(id: string): void {
@@ -635,6 +678,92 @@ export function deleteMessagesFromId(taskId: string, messageId: string): void {
 
 export function updateMessageContent(id: string, content: string): void {
   db.prepare('UPDATE messages SET content = ? WHERE id = ?').run(content, id)
+}
+
+// Chat operations
+
+function rowToChat(row: Record<string, unknown>): Chat {
+  return {
+    id: row.id as string,
+    taskId: row.task_id as string,
+    name: row.name as string,
+    sortPosition: row.sort_position as number,
+    claudeSessionId: row.claude_session_id as string | undefined,
+    createdAt: row.created_at as string
+  }
+}
+
+export function getChatsByTask(taskId: string): Chat[] {
+  const rows = db.prepare(
+    'SELECT * FROM chats WHERE task_id = ? ORDER BY sort_position ASC'
+  ).all(taskId)
+  return rows.map(row => rowToChat(row as Record<string, unknown>))
+}
+
+export function getChatById(id: string): Chat | undefined {
+  const row = db.prepare('SELECT * FROM chats WHERE id = ?').get(id)
+  return row ? rowToChat(row as Record<string, unknown>) : undefined
+}
+
+export function createChat(taskId: string, name: string): Chat {
+  const id = uuidv4()
+  const now = new Date().toISOString()
+  const maxPos = db.prepare(
+    'SELECT MAX(sort_position) as max FROM chats WHERE task_id = ?'
+  ).get(taskId) as { max: number | null }
+  const sortPosition = (maxPos.max ?? -1) + 1
+
+  db.prepare(`
+    INSERT INTO chats (id, task_id, name, sort_position, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(id, taskId, name, sortPosition, now)
+
+  return getChatById(id)!
+}
+
+export function updateChatName(id: string, name: string): void {
+  db.prepare('UPDATE chats SET name = ? WHERE id = ?').run(name, id)
+}
+
+export function deleteChat(id: string): void {
+  db.prepare('DELETE FROM chats WHERE id = ?').run(id)
+}
+
+export function getChatCountByTask(taskId: string): number {
+  const result = db.prepare(
+    'SELECT COUNT(*) as count FROM chats WHERE task_id = ?'
+  ).get(taskId) as { count: number }
+  return result.count
+}
+
+export function ensureDefaultChat(taskId: string): Chat {
+  const existing = getChatsByTask(taskId)
+  if (existing.length > 0) return existing[0]
+  return createChat(taskId, 'Chat 1')
+}
+
+export function getMessagesByChat(chatId: string): Message[] {
+  const rows = db.prepare(
+    'SELECT * FROM messages WHERE chat_id = ? ORDER BY timestamp ASC'
+  ).all(chatId)
+  return rows.map(row => rowToMessage(row as Record<string, unknown>))
+}
+
+export function deleteMessagesFromChatId(chatId: string, messageId: string): void {
+  const targetMessage = db.prepare('SELECT id, timestamp FROM messages WHERE id = ?').get(messageId) as { id: string; timestamp: string } | undefined
+  if (!targetMessage) return
+
+  db.prepare(`
+    DELETE FROM messages
+    WHERE chat_id = ? AND (
+      timestamp > ? OR
+      (timestamp = ? AND rowid >= (SELECT rowid FROM messages WHERE id = ?))
+    )
+  `).run(chatId, targetMessage.timestamp, targetMessage.timestamp, messageId)
+}
+
+export function setChatClaudeSessionId(chatId: string, sessionId: string | null): void {
+  db.prepare('UPDATE chats SET claude_session_id = ? WHERE id = ?').run(sessionId, chatId)
 }
 
 // Attachment operations

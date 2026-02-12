@@ -14,26 +14,34 @@ interface TaskChatProps {
 
 export function TaskChat({ task, onBack }: TaskChatProps) {
   const {
-    messagesByTask,
     attachmentsByTask,
     pendingAttachmentsByTask,
     pendingResponses,
-    sendMessage,
-    completeTask,
-    reopenTask,
+    chatsByTask,
+    activeChatIdByTask,
+    messagesByChat,
+    sendChatMessage,
+    retryChatMessage,
+    editAndResendChatMessage,
     removeAttachment,
     addPendingAttachment,
     addPendingAttachmentFromData,
     removePendingAttachment,
     updateTask,
-    retryMessage,
-    editAndResendMessage
+    createChat,
+    deleteChat,
+    setActiveChat,
+    updateChatName,
+    getContextForTask
   } = useTaskStore()
 
-  const messages = messagesByTask[task.id] || []
+  const chats = chatsByTask[task.id] || []
+  const activeChatId = activeChatIdByTask[task.id]
+  const messages = activeChatId ? (messagesByChat[activeChatId] || []) : []
   const attachments = attachmentsByTask[task.id] || []
   const pendingAttachments = pendingAttachmentsByTask[task.id] || []
-  const isPending = pendingResponses.has(task.id)
+  const isPending = activeChatId ? pendingResponses.has(activeChatId) : false
+  const context = getContextForTask(task.id)
 
   // Create a map of attachments by ID for quick lookup when rendering messages
   const attachmentsById = useMemo(() => {
@@ -57,6 +65,8 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
   const [editedName, setEditedName] = useState(task.name)
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [editingTabId, setEditingTabId] = useState<string | null>(null)
+  const [editingTabName, setEditingTabName] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -74,11 +84,11 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
   }, [input])
 
   const handleSend = async () => {
-    if (!input.trim() || isPending) return
+    if (!input.trim() || isPending || !activeChatId) return
 
     const message = input.trim()
     setInput('')
-    await sendMessage(task.id, message)
+    await sendChatMessage(task.id, activeChatId, message)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -86,15 +96,6 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
       e.preventDefault()
       handleSend()
     }
-  }
-
-  const handleTaskAction = async () => {
-    if (task.status === 'archived') {
-      await reopenTask(task.id)
-    } else {
-      await completeTask(task.id)
-    }
-    onBack()
   }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,63 +138,49 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
     }
   }
 
+  const handleTabNameSave = async (chatId: string) => {
+    if (editingTabName.trim()) {
+      await updateChatName(chatId, editingTabName.trim())
+    }
+    setEditingTabId(null)
+  }
+
+  const handleTabNameKeyDown = (e: React.KeyboardEvent, chatId: string) => {
+    if (e.key === 'Enter') {
+      handleTabNameSave(chatId)
+    } else if (e.key === 'Escape') {
+      setEditingTabId(null)
+    }
+  }
+
+  const handleCreateChat = async () => {
+    await createChat(task.id)
+  }
+
+  const handleDeleteChat = async (chatId: string) => {
+    await deleteChat(chatId, task.id)
+  }
+
   const hasDetails = !!(task.deadline || task.description || attachments.length > 0)
 
   return (
     <div className="flex flex-col h-full bg-surface">
       {/* Header */}
       <div className="flex-shrink-0 border-b border-border-light">
-        <div className="px-4 py-3">
+        {/* Top bar: Back + Task name + Context + Expand */}
+        <div className="px-4 py-3 flex items-center gap-3">
+          {/* Back button */}
           <button
             onClick={onBack}
-            className="flex items-center gap-1.5 text-text-secondary hover:text-text transition-colors titlebar-no-drag"
+            className="flex items-center gap-1 text-text-secondary hover:text-text transition-colors titlebar-no-drag flex-shrink-0"
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            <span className="text-sm">Back</span>
           </button>
-        </div>
 
-        {/* Task Info - Always visible row */}
-        <div className="px-4 pb-3">
-          <div className="flex items-center gap-3">
-            {/* Checkbox */}
-            {task.status !== 'archived' ? (
-              <button
-                onClick={handleTaskAction}
-                className="w-5 h-5 rounded border-2 border-text-tertiary flex items-center justify-center cursor-pointer transition-all duration-150 flex-shrink-0 hover:border-text-secondary titlebar-no-drag"
-                aria-label="Complete task"
-              />
-            ) : (
-              <button
-                onClick={handleTaskAction}
-                className="w-5 h-5 rounded bg-success border-2 border-success flex items-center justify-center cursor-pointer transition-all duration-150 flex-shrink-0 hover:opacity-80 titlebar-no-drag"
-                aria-label="Reopen task"
-              >
-                <svg
-                  className="w-3 h-3 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={3}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-              </button>
-            )}
-
-            {/* Task name */}
+          {/* Task name (editable on click) */}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             {isEditingName ? (
               <input
                 type="text"
@@ -201,59 +188,47 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
                 onChange={e => setEditedName(e.target.value)}
                 onBlur={handleNameSave}
                 onKeyDown={handleNameKeyDown}
-                className="text-lg font-semibold text-text bg-transparent border-b border-accent-blue focus:outline-none flex-1"
+                className="text-sm font-semibold text-text bg-transparent border-b border-accent-blue focus:outline-none flex-1 min-w-0"
                 autoFocus
               />
             ) : (
-              <h2
+              <span
                 onClick={() => setIsEditingName(true)}
-                className="text-lg font-semibold text-text cursor-pointer hover:text-accent-blue transition-colors flex-1"
+                className="text-sm font-semibold text-text cursor-pointer hover:text-accent-blue transition-colors truncate"
               >
                 {task.name}
-              </h2>
+              </span>
             )}
 
-            {/* Action buttons */}
-            <div className="flex items-center gap-1 flex-shrink-0">
-              {/* Open working folder */}
-              <button
-                onClick={() => window.api.shell.openWorkingFolder(task.id)}
-                className="p-1 text-text-tertiary hover:text-text-secondary transition-colors titlebar-no-drag"
-                aria-label="Open working folder"
-                title="Open in Finder"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
-              </button>
-
-              {/* Chevron toggle + badge */}
-              {hasDetails && (
-                <>
-                  {!isDetailsOpen && attachments.length > 0 && (
-                    <span className="text-2xs text-text-tertiary bg-surface-tertiary rounded px-1.5 py-0.5">
-                      {attachments.length} {attachments.length === 1 ? 'file' : 'files'}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => setIsDetailsOpen(!isDetailsOpen)}
-                    className="p-1 text-text-tertiary hover:text-text-secondary transition-colors titlebar-no-drag"
-                    aria-label={isDetailsOpen ? 'Collapse details' : 'Expand details'}
-                  >
-                    <svg
-                      className={`w-4 h-4 transition-transform ${isDetailsOpen ? 'rotate-180' : ''}`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                </>
-              )}
-            </div>
+            {/* Context name */}
+            {context && (
+              <>
+                <span className="text-text-tertiary text-xs flex-shrink-0">&middot;</span>
+                <span className="text-xs text-text-tertiary truncate flex-shrink-0">
+                  {context.name}
+                </span>
+              </>
+            )}
           </div>
+
+          {/* Expand details chevron */}
+          {hasDetails && (
+            <button
+              onClick={() => setIsDetailsOpen(!isDetailsOpen)}
+              className="p-1 text-text-tertiary hover:text-text-secondary transition-colors titlebar-no-drag flex-shrink-0"
+              aria-label={isDetailsOpen ? 'Collapse details' : 'Expand details'}
+            >
+              <svg
+                className={`w-4 h-4 transition-transform ${isDetailsOpen ? 'rotate-180' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Collapsible details section */}
@@ -282,6 +257,74 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
             )}
           </div>
         )}
+
+        {/* Chat tab bar */}
+        <div className="flex items-center px-2 border-t border-border-light">
+          <div className="flex items-center flex-1 overflow-x-auto min-w-0">
+            {chats.map(chat => (
+              <div
+                key={chat.id}
+                className={`
+                  group flex items-center gap-1 px-3 py-1.5 text-xs cursor-pointer
+                  border-b-2 transition-colors flex-shrink-0
+                  ${chat.id === activeChatId
+                    ? 'border-accent-blue text-text'
+                    : 'border-transparent text-text-tertiary hover:text-text-secondary'
+                  }
+                `}
+                onClick={() => setActiveChat(task.id, chat.id)}
+                onDoubleClick={() => {
+                  setEditingTabId(chat.id)
+                  setEditingTabName(chat.name)
+                }}
+              >
+                {editingTabId === chat.id ? (
+                  <input
+                    type="text"
+                    value={editingTabName}
+                    onChange={e => setEditingTabName(e.target.value)}
+                    onBlur={() => handleTabNameSave(chat.id)}
+                    onKeyDown={e => handleTabNameKeyDown(e, chat.id)}
+                    className="text-xs bg-transparent border-b border-accent-blue focus:outline-none w-16"
+                    autoFocus
+                    onClick={e => e.stopPropagation()}
+                  />
+                ) : (
+                  <span className="truncate max-w-[80px]">{chat.name}</span>
+                )}
+
+                {/* Close button (not on last remaining tab) */}
+                {chats.length > 1 && (
+                  <button
+                    onClick={e => {
+                      e.stopPropagation()
+                      handleDeleteChat(chat.id)
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-0.5 text-text-tertiary hover:text-error transition-all"
+                    aria-label="Close chat"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Add chat button (hidden when 5 chats exist) */}
+          {chats.length < 5 && (
+            <button
+              onClick={handleCreateChat}
+              className="p-1 text-text-tertiary hover:text-text-secondary transition-colors flex-shrink-0 ml-1"
+              title="New chat"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Messages */}
@@ -305,8 +348,8 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
                   message={message}
                   attachments={getMessageAttachments(message)}
                   isStreaming={isPending && isLastAgentMessage}
-                  onRetry={(id) => retryMessage(task.id, id)}
-                  onEdit={(id, content) => editAndResendMessage(task.id, id, content)}
+                  onRetry={activeChatId ? (id) => retryChatMessage(task.id, activeChatId, id) : undefined}
+                  onEdit={activeChatId ? (id, content) => editAndResendChatMessage(task.id, activeChatId, id, content) : undefined}
                 />
               )
             })}
@@ -342,7 +385,7 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
                   className="text-text-tertiary hover:text-error transition-colors"
                   aria-label="Remove attachment"
                 >
-                  ×
+                  &times;
                 </button>
               </div>
             ))}
