@@ -10,6 +10,7 @@ import {
   getContextForTask,
   getDocumentsByContext,
   getAILearningNotesByContext,
+  getAttachmentsByTask,
   createContextDocument,
   createAILearningNote,
   setTaskClaudeSessionId,
@@ -185,7 +186,45 @@ export async function initializeWorkingFolder(taskId: string): Promise<string> {
   if (taskContext) {
     const documents = getDocumentsByContext(taskContext.id)
     for (const doc of documents) {
-      await writeFile(path.join(workingFolder, doc.filename), doc.content, 'utf-8')
+      const filePath = doc.relativePath
+        ? path.join(workingFolder, ...doc.relativePath.split('/'))
+        : path.join(workingFolder, doc.filename)
+
+      // Ensure parent directory exists for files with relative paths
+      const dir = path.dirname(filePath)
+      if (!existsSync(dir)) {
+        await mkdir(dir, { recursive: true })
+      }
+
+      // Binary files are stored as data URLs — extract base64 and write as binary
+      const base64Match = doc.content.match(/^data:([^;]+);base64,(.+)$/)
+      if (base64Match) {
+        await writeFile(filePath, Buffer.from(base64Match[2], 'base64'))
+      } else {
+        await writeFile(filePath, doc.content, 'utf-8')
+      }
+    }
+  }
+
+  // Copy task-specific attachments
+  const taskAttachments = getAttachmentsByTask(taskId)
+  for (const attachment of taskAttachments) {
+    const filePath = attachment.relativePath
+      ? path.join(workingFolder, ...attachment.relativePath.split('/'))
+      : path.join(workingFolder, attachment.filename)
+
+    // Ensure parent directory exists for files with relative paths
+    const dir = path.dirname(filePath)
+    if (!existsSync(dir)) {
+      await mkdir(dir, { recursive: true })
+    }
+
+    // Binary files are stored as data URLs — extract base64 and write as binary
+    const base64Match = attachment.content.match(/^data:([^;]+);base64,(.+)$/)
+    if (base64Match) {
+      await writeFile(filePath, Buffer.from(base64Match[2], 'base64'))
+    } else {
+      await writeFile(filePath, attachment.content, 'utf-8')
     }
   }
 

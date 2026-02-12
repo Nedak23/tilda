@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Task, Message, Attachment, ViewType, CreateTaskInput, UpdateTaskInput, TildaMessage, TildaAttachment, Context, ContextDocument, CreateContextInput, UpdateContextInput, AILearningNote, UpdateAILearningNoteInput } from '../types'
+import type { Task, Message, Attachment, ViewType, CreateTaskInput, UpdateTaskInput, TildaMessage, TildaAttachment, Context, ContextDocument, CreateContextInput, UpdateContextInput, AILearningNote, UpdateAILearningNoteInput, DirectoryFile } from '../types'
 import { GENERAL_CONTEXT_ID } from '../types'
 import { readFileContent, getFileMimeType } from '../utils/fileUtils'
 import { logger } from '../utils/logger'
@@ -18,6 +18,7 @@ interface TaskStore {
   // Messages state per task
   messagesByTask: Record<string, Message[]>
   attachmentsByTask: Record<string, Attachment[]>
+  pendingAttachmentsByTask: Record<string, Attachment[]>
 
   // Pending responses
   pendingResponses: Set<string>
@@ -61,7 +62,12 @@ interface TaskStore {
 
   // Attachment actions
   loadAttachments: (taskId: string) => Promise<void>
+  loadPendingAttachments: (taskId: string) => Promise<void>
   addAttachment: (taskId: string, file: File) => Promise<void>
+  addAttachmentFromData: (taskId: string, data: DirectoryFile) => Promise<void>
+  addPendingAttachment: (taskId: string, file: File) => Promise<void>
+  addPendingAttachmentFromData: (taskId: string, data: DirectoryFile) => Promise<void>
+  removePendingAttachment: (id: string, taskId: string) => Promise<void>
   removeAttachment: (id: string, taskId: string) => Promise<void>
 
   // Helpers
@@ -76,6 +82,7 @@ interface TaskStore {
   loadTildaAttachments: () => Promise<void>
   loadPendingTildaAttachments: () => Promise<void>
   addTildaAttachment: (file: File) => Promise<void>
+  addTildaAttachmentFromData: (data: DirectoryFile) => Promise<void>
   removeTildaAttachment: (id: string) => Promise<void>
   retryTildaMessage: (messageId: string) => Promise<void>
   editAndResendTildaMessage: (messageId: string, newContent: string) => Promise<void>
@@ -98,6 +105,7 @@ interface TaskStore {
   // Context document actions
   loadContextDocuments: (contextId: string) => Promise<void>
   addContextDocument: (contextId: string, file: File) => Promise<void>
+  addContextDocumentFromData: (contextId: string, data: DirectoryFile) => Promise<void>
   removeContextDocument: (id: string, contextId: string) => Promise<void>
 
   // Context helpers
@@ -120,6 +128,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   deletedTasks: [],
   messagesByTask: {},
   attachmentsByTask: {},
+  pendingAttachmentsByTask: {},
   pendingResponses: new Set(),
   tildaMessages: [],
   tildaAttachments: [],
@@ -133,10 +142,14 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   // View actions
   setCurrentView: (view) => {
     set({ currentView: view, activeTaskId: null })
+    window.api.tasks.setActive(null)
   },
 
   setActiveTask: async (taskId) => {
     set({ activeTaskId: taskId })
+
+    // Notify main process so it knows which task is being viewed
+    window.api.tasks.setActive(taskId)
 
     if (taskId) {
       // Clear unread indicator
@@ -152,6 +165,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       if (!get().attachmentsByTask[taskId]) {
         await get().loadAttachments(taskId)
       }
+      // Always load pending attachments when entering a task
+      await get().loadPendingAttachments(taskId)
     }
   },
 
@@ -355,26 +370,36 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   },
 
   sendMessage: async (taskId, content) => {
-    const { pendingResponses, activeTaskId } = get()
+    const { pendingResponses } = get()
+
+    // Capture current pending attachments before sending
+    const currentPendingAttachments = get().pendingAttachmentsByTask[taskId] || []
+    const attachmentIds = currentPendingAttachments.map(a => a.id)
 
     // Mark as pending
     const newPending = new Set(pendingResponses)
     newPending.add(taskId)
     set({ pendingResponses: newPending })
 
-    // Optimistically add user message
+    // Optimistically add user message with attachment IDs
     const tempUserMessage: Message = {
       id: `temp-${Date.now()}`,
       taskId,
       sender: 'user',
       content,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined
     }
 
     set(state => ({
       messagesByTask: {
         ...state.messagesByTask,
         [taskId]: [...(state.messagesByTask[taskId] || []), tempUserMessage]
+      },
+      // Clear pending attachments optimistically
+      pendingAttachmentsByTask: {
+        ...state.pendingAttachmentsByTask,
+        [taskId]: []
       }
     }))
 
@@ -414,14 +439,19 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
             }
           }
         })
-      })
+      }, attachmentIds.length > 0 ? attachmentIds : undefined)
 
-      // Reload messages to get persisted versions
+      // Reload messages and pending attachments to get persisted versions
       await get().loadMessages(taskId)
+      await get().loadPendingAttachments(taskId)
 
-      // If user navigated away, task might have unread flag
-      if (activeTaskId !== taskId) {
-        await get().loadTasks()
+      // If user navigated away, mark the task as unread locally
+      if (get().activeTaskId !== taskId) {
+        set(state => ({
+          tasks: state.tasks.map(t =>
+            t.id === taskId ? { ...t, hasUnreadAgentMessage: true } : t
+          )
+        }))
       }
     } catch (error) {
       const errorMessage = (error as Error).message
@@ -451,7 +481,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   },
 
   retryMessage: async (taskId, messageId) => {
-    const { pendingResponses, activeTaskId } = get()
+    const { pendingResponses } = get()
     const messages = get().messagesByTask[taskId] || []
     const messageIndex = messages.findIndex(m => m.id === messageId)
     if (messageIndex === -1) return
@@ -514,9 +544,13 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       // Reload messages to get persisted versions
       await get().loadMessages(taskId)
 
-      // If user navigated away, task might have unread flag
-      if (activeTaskId !== taskId) {
-        await get().loadTasks()
+      // If user navigated away, mark the task as unread locally
+      if (get().activeTaskId !== taskId) {
+        set(state => ({
+          tasks: state.tasks.map(t =>
+            t.id === taskId ? { ...t, hasUnreadAgentMessage: true } : t
+          )
+        }))
       }
     } catch (error) {
       const errorMessage = (error as Error).message
@@ -546,7 +580,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   },
 
   editAndResendMessage: async (taskId, messageId, newContent) => {
-    const { pendingResponses, activeTaskId } = get()
+    const { pendingResponses } = get()
     const messages = get().messagesByTask[taskId] || []
     const messageIndex = messages.findIndex(m => m.id === messageId)
     if (messageIndex === -1) return
@@ -614,9 +648,13 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       // Reload messages to get persisted versions
       await get().loadMessages(taskId)
 
-      // If user navigated away, task might have unread flag
-      if (activeTaskId !== taskId) {
-        await get().loadTasks()
+      // If user navigated away, mark the task as unread locally
+      if (get().activeTaskId !== taskId) {
+        set(state => ({
+          tasks: state.tasks.map(t =>
+            t.id === taskId ? { ...t, hasUnreadAgentMessage: true } : t
+          )
+        }))
       }
     } catch (error) {
       const errorMessage = (error as Error).message
@@ -657,6 +695,17 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     }
   },
 
+  loadPendingAttachments: async (taskId) => {
+    try {
+      const attachments = await window.api.attachments.getPending(taskId)
+      set(state => ({
+        pendingAttachmentsByTask: { ...state.pendingAttachmentsByTask, [taskId]: attachments }
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+    }
+  },
+
   addAttachment: async (taskId, file) => {
     try {
       const content = await readFileContent(file)
@@ -667,6 +716,27 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         file.name,
         content,
         mimeType
+      )
+      set(state => ({
+        attachmentsByTask: {
+          ...state.attachmentsByTask,
+          [taskId]: [...(state.attachmentsByTask[taskId] || []), attachment]
+        }
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  addAttachmentFromData: async (taskId, data) => {
+    try {
+      const attachment = await window.api.attachments.create(
+        taskId,
+        data.filename,
+        data.content,
+        data.mimeType,
+        data.relativePath
       )
       set(state => ({
         attachmentsByTask: {
@@ -695,10 +765,81 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     }
   },
 
+  addPendingAttachment: async (taskId, file) => {
+    try {
+      const content = await readFileContent(file)
+      const mimeType = getFileMimeType(file)
+
+      const attachment = await window.api.attachments.create(
+        taskId,
+        file.name,
+        content,
+        mimeType
+      )
+      set(state => ({
+        attachmentsByTask: {
+          ...state.attachmentsByTask,
+          [taskId]: [...(state.attachmentsByTask[taskId] || []), attachment]
+        },
+        pendingAttachmentsByTask: {
+          ...state.pendingAttachmentsByTask,
+          [taskId]: [...(state.pendingAttachmentsByTask[taskId] || []), attachment]
+        }
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  addPendingAttachmentFromData: async (taskId, data) => {
+    try {
+      const attachment = await window.api.attachments.create(
+        taskId,
+        data.filename,
+        data.content,
+        data.mimeType,
+        data.relativePath
+      )
+      set(state => ({
+        attachmentsByTask: {
+          ...state.attachmentsByTask,
+          [taskId]: [...(state.attachmentsByTask[taskId] || []), attachment]
+        },
+        pendingAttachmentsByTask: {
+          ...state.pendingAttachmentsByTask,
+          [taskId]: [...(state.pendingAttachmentsByTask[taskId] || []), attachment]
+        }
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  removePendingAttachment: async (id, taskId) => {
+    try {
+      await window.api.attachments.delete(id)
+      set(state => ({
+        attachmentsByTask: {
+          ...state.attachmentsByTask,
+          [taskId]: (state.attachmentsByTask[taskId] || []).filter(a => a.id !== id)
+        },
+        pendingAttachmentsByTask: {
+          ...state.pendingAttachmentsByTask,
+          [taskId]: (state.pendingAttachmentsByTask[taskId] || []).filter(a => a.id !== id)
+        }
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
   // Helpers
   getTodayTasks: () => {
     return get()
-      .tasks.filter(t => t.status === 'today')
+      .tasks.filter(t => t.status === 'today' && !t.isStarted)
       .sort((a, b) => a.sortPosition - b.sortPosition)
   },
 
@@ -822,6 +963,24 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       )
       set(state => ({
         // Add to both: all attachments (for lookup) and pending (for input area)
+        tildaAttachments: [...state.tildaAttachments, attachment],
+        pendingTildaAttachments: [...state.pendingTildaAttachments, attachment]
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  addTildaAttachmentFromData: async (data) => {
+    try {
+      const attachment = await window.api.tildaAttachments.create(
+        data.filename,
+        data.content,
+        data.mimeType,
+        data.relativePath
+      )
+      set(state => ({
         tildaAttachments: [...state.tildaAttachments, attachment],
         pendingTildaAttachments: [...state.pendingTildaAttachments, attachment]
       }))
@@ -1053,9 +1212,6 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
     // Mark as started
     await get().updateTask(taskId, { isStarted: true })
-
-    // Navigate to chat
-    await get().setActiveTask(taskId)
   },
 
   stopWorking: async (taskId) => {
@@ -1105,6 +1261,28 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         content,
         file.type || 'text/plain',
         file.size
+      )
+      set(state => ({
+        contextDocumentsByContext: {
+          ...state.contextDocumentsByContext,
+          [contextId]: [...(state.contextDocumentsByContext[contextId] || []), document]
+        }
+      }))
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  addContextDocumentFromData: async (contextId, data) => {
+    try {
+      const document = await window.api.contextDocuments.create(
+        contextId,
+        data.filename,
+        data.content,
+        data.mimeType,
+        data.fileSize,
+        data.relativePath
       )
       set(state => ({
         contextDocumentsByContext: {

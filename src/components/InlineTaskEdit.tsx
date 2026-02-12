@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { format, parseISO, isValid } from 'date-fns'
 import { useTaskStore } from '../stores/taskStore'
-import { ChatMessage } from './ChatMessage'
 import { CalendarPicker } from './CalendarPicker'
 import { isFileSupported, FILE_INPUT_ACCEPT } from '../utils/fileUtils'
 import { logger } from '../utils/logger'
@@ -11,24 +10,22 @@ import type { Task, RecurrenceRule } from '../types'
 interface InlineTaskEditProps {
   task?: Task
   onClose: () => void
-  onExpandChat?: () => void
   onComplete?: () => void
   defaultDate?: string
   defaultContextId?: string
   onSaveAndCreateNew?: () => void
+  onStartWorking?: () => void
+  showStartWorking?: boolean
 }
 
-export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaultDate, defaultContextId, onSaveAndCreateNew }: InlineTaskEditProps) {
+export function InlineTaskEdit({ task, onClose, onComplete, defaultDate, defaultContextId, onSaveAndCreateNew, onStartWorking, showStartWorking = false }: InlineTaskEditProps) {
   const {
-    messagesByTask,
     attachmentsByTask,
-    pendingResponses,
     updateTask,
     createTask,
-    sendMessage,
-    loadMessages,
     loadAttachments,
     addAttachment,
+    addAttachmentFromData,
     removeAttachment,
     contexts,
     setTaskContext
@@ -42,8 +39,6 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
   const activeTask = task || createdTask
 
   const attachments = activeTask ? (attachmentsByTask[activeTask.id] || []) : []
-  const messages = activeTask ? (messagesByTask[activeTask.id] || []) : []
-  const isPending = activeTask ? pendingResponses.has(activeTask.id) : false
 
   const [editedName, setEditedName] = useState(task?.name || '')
   const [editedDescription, setEditedDescription] = useState(task?.description || '')
@@ -51,26 +46,19 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
   const [localDeadline, setLocalDeadline] = useState(task?.deadline || '')
   const [localContextId, setLocalContextId] = useState<string | undefined>(defaultContextId)
   const [localRecurrenceRule, setLocalRecurrenceRule] = useState<RecurrenceRule | undefined>(task?.recurrenceRule)
-  const [chatInput, setChatInput] = useState('')
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [showDeadlinePicker, setShowDeadlinePicker] = useState(false)
   const [showContextPicker, setShowContextPicker] = useState(false)
+  const [showAttachMenu, setShowAttachMenu] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const datePickerRef = useRef<HTMLDivElement>(null)
   const deadlinePickerRef = useRef<HTMLDivElement>(null)
   const contextPickerRef = useRef<HTMLDivElement>(null)
+  const attachMenuRef = useRef<HTMLDivElement>(null)
   const descriptionRef = useRef<HTMLTextAreaElement>(null)
-
-  // Load messages when component mounts (edit mode only)
-  useEffect(() => {
-    if (activeTask && !messagesByTask[activeTask.id]) {
-      loadMessages(activeTask.id)
-    }
-  }, [activeTask?.id, messagesByTask, loadMessages])
 
   // Load attachments when component mounts (edit mode only)
   useEffect(() => {
@@ -81,11 +69,6 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
 
   // Get context from task or local state
   const taskContextId = activeTask?.contextId || localContextId
-
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
 
   // Focus name input on mount
   useEffect(() => {
@@ -158,6 +141,9 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
       if (contextPickerRef.current && !contextPickerRef.current.contains(e.target as Node)) {
         setShowContextPicker(false)
       }
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) {
+        setShowAttachMenu(false)
+      }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
@@ -227,25 +213,6 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
   const handleDescriptionBlur = async () => {
     if (activeTask && editedDescription !== (activeTask.description || '')) {
       await updateTask(activeTask.id, { description: editedDescription.trim() || undefined })
-    }
-  }
-
-  const handleSendMessage = async () => {
-    if (!chatInput.trim() || isPending) return
-
-    // Ensure task exists before sending message
-    const taskToUse = await ensureTask()
-    if (!taskToUse) return
-
-    const message = chatInput.trim()
-    setChatInput('')
-    await sendMessage(taskToUse.id, message)
-  }
-
-  const handleChatKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSendMessage()
     }
   }
 
@@ -322,16 +289,22 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
     e.target.value = ''
   }
 
+  const handleDirectorySelect = async () => {
+    const files = await window.api.dialog.selectDirectory()
+    if (!files) return
+
+    const taskToUse = await ensureTask()
+    if (!taskToUse) return
+
+    for (const file of files) {
+      await addAttachmentFromData(taskToUse.id, file)
+    }
+  }
+
   const handleCheckboxClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (onComplete && activeTask) {
       onComplete()
-    }
-  }
-
-  const handleExpandChat = () => {
-    if (onExpandChat && activeTask) {
-      onExpandChat()
     }
   }
 
@@ -347,11 +320,31 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
   return (
     <div
       ref={containerRef}
-      className="mx-2 my-4 rounded-lg border border-border bg-surface-secondary animate-fade-in"
+      className="mx-1 my-4 rounded-lg border border-border bg-surface-secondary animate-fade-in"
     >
       {/* Header section with checkbox, name, description */}
-      <div className="p-4">
-        <div className="flex items-start gap-3">
+      <div className="pl-2 pr-4 pt-4 pb-4">
+        <div className="group/edit flex items-start gap-3">
+          {/* Start Working button */}
+          {showStartWorking && (
+            <div className="w-4 flex items-center justify-center flex-shrink-0 mt-0.5">
+              {activeTask && activeTask.status !== 'archived' && !activeTask.isStarted && onStartWorking ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onStartWorking()
+                  }}
+                  className="text-text-tertiary hover:text-accent-blue transition-colors opacity-0 group-hover/edit:opacity-100"
+                  title="Start working"
+                >
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M16 5v14L5 12z" />
+                  </svg>
+                </button>
+              ) : null}
+            </div>
+          )}
+
           {/* Checkbox */}
           {isCreateMode ? (
             <div className="checkbox flex-shrink-0 mt-0.5 opacity-50 cursor-not-allowed" />
@@ -397,15 +390,45 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
                 rows={1}
                 className="flex-1 bg-transparent text-text-secondary text-sm placeholder-text-tertiary focus:outline-none resize-none overflow-hidden"
               />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="p-1 text-text-tertiary hover:text-text transition-colors flex-shrink-0"
-                title="Attach file"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                </svg>
-              </button>
+              <div className="relative flex-shrink-0" ref={attachMenuRef}>
+                <button
+                  onClick={() => setShowAttachMenu(!showAttachMenu)}
+                  className="p-1 text-text-tertiary hover:text-text transition-colors"
+                  title="Attach"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                </button>
+                {showAttachMenu && (
+                  <div className="absolute right-0 top-full mt-1 bg-surface-tertiary rounded-lg shadow-elevated p-1 z-20 w-36">
+                    <button
+                      onClick={() => {
+                        fileInputRef.current?.click()
+                        setShowAttachMenu(false)
+                      }}
+                      className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-text hover:bg-surface rounded transition-colors"
+                    >
+                      <svg className="w-4 h-4 text-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                      </svg>
+                      Files
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleDirectorySelect()
+                        setShowAttachMenu(false)
+                      }}
+                      className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-text hover:bg-surface rounded transition-colors"
+                    >
+                      <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z" />
+                      </svg>
+                      Folder
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             {/* Attachments display */}
             {attachments.length > 0 && (
@@ -433,7 +456,7 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
         </div>
 
         {/* Date row with context pills and deadline */}
-        <div className="flex items-center justify-between mt-4 ml-7">
+        <div className={`flex items-center justify-between mt-4 ${showStartWorking ? 'ml-14' : 'ml-7'}`}>
           {/* Left side: Date picker and context pills */}
           <div className="flex items-center gap-2 flex-wrap">
             {/* Date picker */}
@@ -566,100 +589,18 @@ export function InlineTaskEdit({ task, onClose, onExpandChat, onComplete, defaul
               )}
             </div>
 
-            {/* Expand chat button */}
-            {activeTask && (
-              <button
-                onClick={handleExpandChat}
-                className="p-1 text-text-tertiary hover:text-text transition-colors"
-                title="Expand chat"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                </svg>
-              </button>
-            )}
           </div>
         </div>
       </div>
 
-      {/* Chat area */}
-      <div className="flex flex-col border-t border-border">
-        {/* Messages */}
-        <div className="max-h-48 overflow-y-auto p-4 space-y-3">
-          {messages.length === 0 ? (
-            <div className="text-center text-text-tertiary text-sm py-4">
-              Start a conversation about this task
-            </div>
-          ) : (
-            <>
-              {messages.map((message, index) => {
-                const isLastAgentMessage = message.sender === 'agent' && index === messages.length - 1
-                return (
-                  <ChatMessage
-                    key={message.id}
-                    message={message}
-                    isStreaming={isPending && isLastAgentMessage}
-                  />
-                )
-              })}
-            </>
-          )}
-
-          {isPending && messages[messages.length - 1]?.sender === 'user' && (
-            <div className="flex justify-start">
-              <div className="bg-surface-tertiary px-4 py-2.5 rounded-2xl rounded-bl-md">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 bg-text-tertiary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 bg-text-tertiary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 bg-text-tertiary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Chat input */}
-        <div className="px-4 py-3 border-t border-border flex items-center gap-3">
-          {/* Attach button */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="p-1.5 text-text-tertiary hover:text-text transition-colors"
-            title="Attach file"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-            </svg>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={FILE_INPUT_ACCEPT}
-            multiple
-            onChange={handleFileSelect}
-            className="hidden"
-          />
-          <input
-            type="text"
-            value={chatInput}
-            onChange={e => setChatInput(e.target.value)}
-            onKeyDown={handleChatKeyDown}
-            placeholder="Message"
-            className="flex-1 bg-transparent text-sm text-text placeholder-text-tertiary focus:outline-none"
-          />
-          <button
-            onClick={handleSendMessage}
-            disabled={!chatInput.trim() || isPending}
-            className="p-1.5 text-text-tertiary hover:text-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Send message"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
-            </svg>
-          </button>
-        </div>
-      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={FILE_INPUT_ACCEPT}
+        multiple
+        onChange={handleFileSelect}
+        className="hidden"
+      />
     </div>
   )
 }

@@ -11,7 +11,8 @@ const activeRequests = new Map<string, boolean>()
 export async function sendMessage(
   taskId: string,
   userMessage: string,
-  onChunk: (chunk: string) => void
+  onChunk: (chunk: string) => void,
+  attachmentIds?: string[]
 ): Promise<string> {
   logger.log('LLM sendMessage called for task:', taskId)
 
@@ -21,8 +22,8 @@ export async function sendMessage(
   // Mark as active
   activeRequests.set(taskId, true)
 
-  // Save user message to database
-  createMessage(taskId, userMessage, 'user')
+  // Save user message to database (with attachment IDs if present)
+  createMessage(taskId, userMessage, 'user', attachmentIds)
 
   try {
     logger.log('Calling sendToClaudeCode...')

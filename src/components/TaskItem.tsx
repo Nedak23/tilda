@@ -19,7 +19,6 @@ interface TaskItemProps {
   isEditing?: boolean
   onStartEdit?: () => void
   onCloseEdit?: () => void
-  onExpandChat?: () => void
   onSaveAndCreateNew?: () => void
   onStartWorking?: () => void
   showStartWorking?: boolean
@@ -37,7 +36,6 @@ export function TaskItem({
   isEditing = false,
   onStartEdit,
   onCloseEdit,
-  onExpandChat,
   onSaveAndCreateNew,
   onStartWorking,
   showStartWorking = false
@@ -117,14 +115,15 @@ export function TaskItem({
   })()
 
   // If editing, render InlineTaskEdit instead
-  if (isEditing && onCloseEdit && onExpandChat) {
+  if (isEditing && onCloseEdit) {
     return (
       <InlineTaskEdit
         task={task}
         onClose={onCloseEdit}
-        onExpandChat={onExpandChat}
         onComplete={onComplete}
         onSaveAndCreateNew={onSaveAndCreateNew}
+        onStartWorking={onStartWorking}
+        showStartWorking={showStartWorking}
       />
     )
   }
@@ -139,7 +138,7 @@ export function TaskItem({
         ${isCompleting ? 'animate-complete-out' : ''}
       `}
     >
-      {/* Start Working button / Started indicator - always render spacer for alignment when showStartWorking is set */}
+      {/* Start Working button */}
       {showStartWorking && (
         <div className="w-4 flex items-center justify-center flex-shrink-0">
           {task.status !== 'archived' && !task.isStarted && onStartWorking ? (
@@ -155,8 +154,6 @@ export function TaskItem({
                 <path d="M16 5v14L5 12z" />
               </svg>
             </button>
-          ) : task.status !== 'archived' && task.isStarted ? (
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" title="Working on this" />
           ) : null}
         </div>
       )}
@@ -221,11 +218,6 @@ export function TaskItem({
             {context.name}
           </span>
         </div>
-      )}
-
-      {/* Blue dot for unread - hidden in logbook */}
-      {task.hasUnreadAgentMessage && task.status !== 'archived' && (
-        <span className="w-2 h-2 rounded-full bg-accent-blue animate-pulse-dot flex-shrink-0" />
       )}
 
       {/* Spacer */}
