@@ -201,13 +201,13 @@ export function PanelLayout({
 
       <Separator className="w-1 bg-border-light hover:bg-accent-blue transition-colors cursor-col-resize" />
 
-      {/* Right: Tilda Chat Sidebar */}
+      {/* Right: File Manager Sidebar */}
       <Panel
         panelRef={setRightPanelHandle as React.Ref<PanelImperativeHandle>}
         id="tilda-sidebar"
-        defaultSize="40%"
-        minSize="260px"
-        maxSize="480px"
+        defaultSize="20%"
+        minSize="200px"
+        maxSize="350px"
         collapsible
         collapsedSize="0px"
         onResize={handleRightResize}
