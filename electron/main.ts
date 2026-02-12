@@ -29,16 +29,6 @@ import {
   createAttachment,
   deleteAttachment,
   setUnreadAgentMessage,
-  getTildaMessages,
-  clearTildaMessages,
-  deleteTildaMessage,
-  deleteTildaMessagesFromId,
-  updateTildaMessageContent,
-  getTildaAttachments,
-  getPendingTildaAttachments,
-  createTildaAttachment,
-  deleteTildaAttachment,
-  clearTildaAttachments,
   getAllContexts,
   getContextById,
   createContext,
@@ -60,7 +50,6 @@ import {
 import { completeTaskWithLearning } from './learning-check'
 import { sendMessage, cancelRequest, regenerateResponse, getProcessStatus } from './llm'
 import { extractAndCleanup, cleanupOrphanedFolders, getWorkingFolder } from './claude-code'
-import { sendTildaMessage, cancelTildaRequest, regenerateTildaResponse } from './tilda'
 import { getSettings, saveSettings, type Settings } from './settings'
 import type { CreateTaskInput, UpdateTaskInput, MessageSender, CreateContextInput, UpdateContextInput, CreateAILearningNoteInput, UpdateAILearningNoteInput, FeedbackInput } from '../src/types'
 
@@ -269,81 +258,6 @@ ipcMain.handle('settings:save', (_event, settings: Settings) => {
   saveSettings(settings)
 })
 
-// IPC Handlers for Tilda
-ipcMain.handle('tilda:getMessages', () => {
-  return getTildaMessages()
-})
-
-ipcMain.handle('tilda:sendMessage', async (event, userMessage: string, channel: string) => {
-  try {
-    const response = await sendTildaMessage(userMessage, (chunk: string) => {
-      event.sender.send(channel, chunk)
-    })
-    return response
-  } catch (error) {
-    throw error
-  }
-})
-
-ipcMain.on('tilda:cancel', () => {
-  cancelTildaRequest()
-})
-
-ipcMain.handle('tilda:clearHistory', async () => {
-  try {
-    clearTildaMessages()
-    clearTildaAttachments()
-    return { success: true }
-  } catch (error) {
-    logger.error('Failed to clear Tilda history:', error)
-    throw error
-  }
-})
-
-ipcMain.handle('tilda:deleteMessage', (_event, id: string) => {
-  deleteTildaMessage(id)
-})
-
-ipcMain.handle('tilda:deleteMessagesFromId', (_event, messageId: string) => {
-  deleteTildaMessagesFromId(messageId)
-})
-
-ipcMain.handle('tilda:updateMessage', (_event, id: string, content: string) => {
-  updateTildaMessageContent(id, content)
-})
-
-ipcMain.handle('tilda:regenerateResponse', async (event, channel: string) => {
-  try {
-    const response = await regenerateTildaResponse((chunk: string) => {
-      event.sender.send(channel, chunk)
-    })
-    return response
-  } catch (error) {
-    throw error
-  }
-})
-
-// IPC Handlers for Tilda Attachments
-ipcMain.handle('tildaAttachments:getAll', () => {
-  return getTildaAttachments()
-})
-
-ipcMain.handle('tildaAttachments:getPending', () => {
-  return getPendingTildaAttachments()
-})
-
-ipcMain.handle('tildaAttachments:create', (_event, filename: string, content: string, mimeType: string, relativePath?: string) => {
-  return createTildaAttachment(filename, content, mimeType, relativePath)
-})
-
-ipcMain.handle('tildaAttachments:delete', (_event, id: string) => {
-  deleteTildaAttachment(id)
-})
-
-ipcMain.handle('tildaAttachments:clear', () => {
-  clearTildaAttachments()
-})
-
 // IPC Handlers for Contexts
 ipcMain.handle('contexts:getAll', () => {
   return getAllContexts()
@@ -500,6 +414,98 @@ ipcMain.handle('shell:openWorkingFolder', async (_event, taskId: string) => {
   if (fs.existsSync(folder)) {
     await shell.openPath(folder)
   }
+})
+
+// IPC Handler for listing working folder contents
+ipcMain.handle('shell:listWorkingFolder', async (_event, taskId: string) => {
+  const folder = getWorkingFolder(taskId)
+  if (!fs.existsSync(folder)) {
+    return []
+  }
+
+  interface WorkingFolderEntry {
+    name: string
+    relativePath: string
+    isDirectory: boolean
+    size?: number
+    mimeType?: string
+  }
+
+  function getMimeType(filePath: string): string {
+    const ext = path.extname(filePath).toLowerCase()
+    const mimeTypes: Record<string, string> = {
+      '.txt': 'text/plain',
+      '.md': 'text/markdown',
+      '.markdown': 'text/markdown',
+      '.pdf': 'application/pdf',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.json': 'application/json',
+      '.js': 'text/javascript',
+      '.ts': 'text/typescript',
+      '.html': 'text/html',
+      '.css': 'text/css',
+      '.py': 'text/x-python',
+      '.rb': 'text/x-ruby',
+      '.go': 'text/x-go',
+      '.rs': 'text/x-rust',
+      '.java': 'text/x-java',
+      '.c': 'text/x-c',
+      '.cpp': 'text/x-c++',
+      '.h': 'text/x-c',
+      '.sh': 'text/x-shellscript',
+      '.yaml': 'text/yaml',
+      '.yml': 'text/yaml',
+      '.xml': 'text/xml',
+      '.csv': 'text/csv',
+      '.svg': 'image/svg+xml'
+    }
+    return mimeTypes[ext] || 'application/octet-stream'
+  }
+
+  const entries: WorkingFolderEntry[] = []
+
+  function readDirectoryRecursive(currentPath: string, basePath: string) {
+    const dirEntries = fs.readdirSync(currentPath, { withFileTypes: true })
+    for (const entry of dirEntries) {
+      // Skip hidden files/directories
+      if (entry.name.startsWith('.')) continue
+
+      const fullPath = path.join(currentPath, entry.name)
+      const relPath = path.relative(basePath, fullPath)
+
+      if (entry.isDirectory()) {
+        entries.push({
+          name: entry.name,
+          relativePath: relPath,
+          isDirectory: true
+        })
+        readDirectoryRecursive(fullPath, basePath)
+      } else if (entry.isFile()) {
+        const stat = fs.statSync(fullPath)
+        entries.push({
+          name: entry.name,
+          relativePath: relPath,
+          isDirectory: false,
+          size: stat.size,
+          mimeType: getMimeType(fullPath)
+        })
+      }
+    }
+  }
+
+  readDirectoryRecursive(folder, folder)
+
+  // Sort: folders first, then alphabetically
+  entries.sort((a, b) => {
+    if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
+    return a.name.localeCompare(b.name)
+  })
+
+  return entries
 })
 
 // IPC Handler for Feedback

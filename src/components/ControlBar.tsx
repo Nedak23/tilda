@@ -7,6 +7,7 @@ interface ControlBarProps {
   onToggleNav: () => void
   onOpenSettings: () => void
   onOpenFeedback: () => void
+  hasActiveTask: boolean
 }
 
 interface TooltipButtonProps {
@@ -44,7 +45,8 @@ export function ControlBar({
   onToggleTilda,
   onToggleNav,
   onOpenSettings,
-  onOpenFeedback
+  onOpenFeedback,
+  hasActiveTask
 }: ControlBarProps) {
   return (
     <div className="h-9 bg-surface flex items-center justify-end px-3 border-b border-border-light flex-shrink-0 relative">
@@ -90,11 +92,15 @@ export function ControlBar({
           </svg>
         </TooltipButton>
 
-        {/* Tilda (Chat) Toggle - Right sidebar */}
+        {/* Files Toggle - Right sidebar */}
         <TooltipButton
-          onClick={onToggleTilda}
-          tooltip="Toggle Tilda (⌥⌘B)"
-          className="titlebar-no-drag p-1.5 rounded text-text-tertiary hover:text-text-secondary hover:bg-surface-tertiary transition-colors"
+          onClick={hasActiveTask ? onToggleTilda : () => {}}
+          tooltip="Toggle Files (⌥⌘B)"
+          className={`titlebar-no-drag p-1.5 rounded transition-colors ${
+            hasActiveTask
+              ? 'text-text-tertiary hover:text-text-secondary hover:bg-surface-tertiary'
+              : 'text-text-tertiary/40 cursor-not-allowed'
+          }`}
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             {/* Left panel - always outline */}

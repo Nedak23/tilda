@@ -76,50 +76,6 @@ const api: ElectronAPI = {
     get: () => ipcRenderer.invoke('settings:get'),
     save: (settings: Settings) => ipcRenderer.invoke('settings:save', settings)
   },
-  tilda: {
-    getMessages: () => ipcRenderer.invoke('tilda:getMessages'),
-    sendMessage: (userMessage: string, onChunk: (chunk: string) => void) => {
-      // Create a unique channel for this request
-      const channel = `tilda:chunk:${Date.now()}`
-
-      // Set up listener for chunks
-      const listener = (_event: unknown, chunk: string) => onChunk(chunk)
-      ipcRenderer.on(channel, listener)
-
-      // Send the request
-      return ipcRenderer.invoke('tilda:sendMessage', userMessage, channel).finally(() => {
-        ipcRenderer.removeListener(channel, listener)
-      })
-    },
-    cancelRequest: () => ipcRenderer.send('tilda:cancel'),
-    clearHistory: () => ipcRenderer.invoke('tilda:clearHistory'),
-    deleteMessage: (id: string) => ipcRenderer.invoke('tilda:deleteMessage', id),
-    deleteMessagesFromId: (messageId: string) =>
-      ipcRenderer.invoke('tilda:deleteMessagesFromId', messageId),
-    updateMessage: (id: string, content: string) =>
-      ipcRenderer.invoke('tilda:updateMessage', id, content),
-    regenerateResponse: (onChunk: (chunk: string) => void) => {
-      // Create a unique channel for this request
-      const channel = `tilda:chunk:${Date.now()}`
-
-      // Set up listener for chunks
-      const listener = (_event: unknown, chunk: string) => onChunk(chunk)
-      ipcRenderer.on(channel, listener)
-
-      // Send the request
-      return ipcRenderer.invoke('tilda:regenerateResponse', channel).finally(() => {
-        ipcRenderer.removeListener(channel, listener)
-      })
-    }
-  },
-  tildaAttachments: {
-    getAll: () => ipcRenderer.invoke('tildaAttachments:getAll'),
-    getPending: () => ipcRenderer.invoke('tildaAttachments:getPending'),
-    create: (filename: string, content: string, mimeType: string, relativePath?: string) =>
-      ipcRenderer.invoke('tildaAttachments:create', filename, content, mimeType, relativePath),
-    delete: (id: string) => ipcRenderer.invoke('tildaAttachments:delete', id),
-    clear: () => ipcRenderer.invoke('tildaAttachments:clear')
-  },
   contexts: {
     getAll: () => ipcRenderer.invoke('contexts:getAll'),
     getById: (id: string) => ipcRenderer.invoke('contexts:getById', id),
@@ -177,7 +133,8 @@ const api: ElectronAPI = {
     selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory')
   },
   shell: {
-    openWorkingFolder: (taskId: string) => ipcRenderer.invoke('shell:openWorkingFolder', taskId)
+    openWorkingFolder: (taskId: string) => ipcRenderer.invoke('shell:openWorkingFolder', taskId),
+    listWorkingFolder: (taskId: string) => ipcRenderer.invoke('shell:listWorkingFolder', taskId)
   }
 }
 

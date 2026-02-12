@@ -6,7 +6,7 @@ import { TaskChat } from './components/TaskChat'
 import { InlineTaskEdit } from './components/InlineTaskEdit'
 import { SettingsModal } from './components/SettingsModal'
 import { FeedbackModal } from './components/FeedbackModal'
-import { TildaSidebar } from './components/TildaSidebar'
+import { FileManagerSidebar } from './components/FileManagerSidebar'
 import { ContextDetailView, ContextDetailViewRef } from './components/ContextDetailView'
 import { PanelLayout } from './components/PanelLayout'
 import { ControlBar } from './components/ControlBar'
@@ -78,9 +78,11 @@ function App() {
 
   const activeTask = tasks.find(t => t.id === activeTaskId)
 
-  // Collapse Tilda sidebar when entering full screen task chat mode
+  // Expand file manager sidebar when viewing a task, collapse when not
   useEffect(() => {
     if (activeTaskId) {
+      setTildaCollapsed(false)
+    } else {
       setTildaCollapsed(true)
     }
   }, [activeTaskId, setTildaCollapsed])
@@ -477,6 +479,7 @@ function App() {
         onToggleNav={toggleNav}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenFeedback={() => setIsFeedbackOpen(true)}
+        hasActiveTask={!!activeTaskId}
       />
 
       {/* Main layout with resizable panels */}
@@ -486,9 +489,7 @@ function App() {
             <Sidebar />
           }
           centerPanel={mainContent}
-          rightPanel={
-            <TildaSidebar isOpen={!isTildaCollapsed} />
-          }
+          rightPanel={activeTaskId ? <FileManagerSidebar taskId={activeTaskId} /> : null}
           isLeftCollapsed={isNavCollapsed}
           isRightCollapsed={isTildaCollapsed}
           onLeftCollapseChange={setNavCollapsed}
