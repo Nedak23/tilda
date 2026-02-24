@@ -3,7 +3,7 @@ import os from 'os'
 import path from 'path'
 import { mkdir, writeFile, readdir, readFile, rm, stat } from 'fs/promises'
 import { existsSync } from 'fs'
-import { getTildaDirectory } from './settings'
+import { getTildaDirectory, getModel } from './settings'
 import {
   getTaskById,
   getContextById,
@@ -116,6 +116,24 @@ function generateClaudeMd(task: Task, context: Context | null, generalContext: C
   content += `## Important Files
 - \`.tilda-notes/\` contains relevant learning notes from previous tasks
 - Context documents are in this folder root
+
+## Working Directory Rules
+- You MUST only read, write, and execute within this working directory
+- NEVER access, modify, or reference files outside this folder
+- All file paths should be relative to the current directory
+- Do not use absolute paths or navigate to parent directories
+
+## Asking the User Questions
+When you need to ask the user a question with specific options, format it like this:
+
+:::question
+Your question text here?
+:::option Option A
+:::option Option B
+:::option Option C
+:::endquestion
+
+The user will see clickable buttons for each option. Always use this format when you have specific choices to offer. You can include normal text before or after the question block.
 
 ## Guidelines
 - Focus on helping complete this specific task
@@ -354,14 +372,27 @@ export async function sendMessage(
   // Get the Claude CLI path
   const claudePath = getClaudePath()
 
-  // Build args similar to how Conductor does it
+  // Build args for Claude Code CLI
   const args = [
     '--output-format', 'stream-json',
     '--verbose',
     '--input-format', 'stream-json',
     '--max-turns', '100',
-    '--permission-prompt-tool', 'stdio',
-    '--permission-mode', 'default'
+    '--model', getModel(),
+    '--allowedTools',
+      // Standard tools
+      'Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch',
+      'NotebookEdit', 'Task', 'TodoWrite',
+      // Write/Edit scoped to working directory
+      `Edit(//${workingFolder.replace(/^\//, '')}/**)`,
+      `Write(//${workingFolder.replace(/^\//, '')}/**)`,
+      // Bash restricted to safe commands
+      'Bash(cd *)', 'Bash(ls *)', 'Bash(cat *)', 'Bash(find *)',
+      'Bash(mkdir *)', 'Bash(cp *)', 'Bash(mv *)', 'Bash(rm *)',
+      'Bash(touch *)', 'Bash(head *)', 'Bash(tail *)', 'Bash(wc *)',
+      'Bash(sort *)', 'Bash(grep *)', 'Bash(python *)', 'Bash(python3 *)',
+      'Bash(node *)', 'Bash(npm *)', 'Bash(npx *)',
+    '--append-system-prompt', 'When you need to ask the user a question with specific options, you MUST format it like this:\n\n:::question\nYour question text here?\n:::option Option A\n:::option Option B\n:::option Option C\n:::endquestion\n\nThe user will see clickable buttons for each option. Always use this format when you have specific choices to offer. You can include normal text before or after the question block.'
   ]
 
   // Resume existing session if we have one
@@ -413,8 +444,7 @@ export async function sendMessage(
     }
 
     // Set a timeout to detect if the process fails to start (no output at all)
-    // This is just a sanity check - normal operations may take longer
-    const timeoutId = setTimeout(() => {
+    const startupTimeoutId = setTimeout(() => {
       if (!hasReceivedData) {
         logger.error('Claude Code process timeout - no output received after 30 seconds')
         proc.kill('SIGTERM')
@@ -422,11 +452,39 @@ export async function sendMessage(
       }
     }, 30000)
 
+    // Rolling inactivity timeout - resets on every stdout data
+    const INACTIVITY_WARNING_MS = 120_000
+    const INACTIVITY_KILL_MS = 300_000
+    let inactivityWarningId: ReturnType<typeof setTimeout> | null = null
+    let inactivityKillId: ReturnType<typeof setTimeout> | null = null
+
+    const resetInactivityTimers = () => {
+      if (inactivityWarningId) clearTimeout(inactivityWarningId)
+      if (inactivityKillId) clearTimeout(inactivityKillId)
+      inactivityWarningId = setTimeout(() => {
+        logger.error(`Claude Code inactivity warning - no output for ${INACTIVITY_WARNING_MS / 1000}s (task ${taskId})`)
+      }, INACTIVITY_WARNING_MS)
+      inactivityKillId = setTimeout(() => {
+        logger.error(`Claude Code inactivity timeout - killing process after ${INACTIVITY_KILL_MS / 1000}s (task ${taskId})`)
+        proc.kill('SIGTERM')
+        if (!resolved) {
+          resolved = true
+          reject(new Error('Claude Code process timed out due to inactivity'))
+        }
+      }, INACTIVITY_KILL_MS)
+    }
+
+    const clearInactivityTimers = () => {
+      if (inactivityWarningId) clearTimeout(inactivityWarningId)
+      if (inactivityKillId) clearTimeout(inactivityKillId)
+    }
+
     proc.stdout?.on('data', (data: Buffer) => {
       // Check if we were cancelled
       if (checkCancelled()) return
 
       hasReceivedData = true
+      resetInactivityTimers()
       const text = data.toString()
       logger.log(`Claude Code stdout:`, text.substring(0, 300))
       outputBuffer += text
@@ -463,7 +521,8 @@ export async function sendMessage(
               onChunk(newContent)
             }
           } else if (parsed.type === 'result') {
-            clearTimeout(timeoutId)
+            clearTimeout(startupTimeoutId)
+            clearInactivityTimers()
             // Update registry: mark as not processing, keep session for future use
             const entry = processRegistry.get(chatId)
             if (entry) {
@@ -478,6 +537,8 @@ export async function sendMessage(
               resolved = true
               resolve(currentResponse || parsed.result || '')
             }
+          } else {
+            logger.log(`Claude Code unknown message type: ${parsed.type}`, JSON.stringify(parsed).substring(0, 200))
           }
         } catch {
           // Not JSON, skip
@@ -511,7 +572,8 @@ export async function sendMessage(
           logger.error('Failed to write to Claude Code stdin:', err)
           if (!resolved) {
             resolved = true
-            clearTimeout(timeoutId)
+            clearTimeout(startupTimeoutId)
+            clearInactivityTimers()
             reject(new Error(`Failed to send message to Claude Code: ${err.message}`))
           }
         }
@@ -519,8 +581,16 @@ export async function sendMessage(
     })
 
     proc.on('exit', (code, signal) => {
-      clearTimeout(timeoutId)
+      clearTimeout(startupTimeoutId)
+      clearInactivityTimers()
       logger.log(`Claude Code process exited with code ${code}, signal ${signal}`)
+
+      // Update registry: mark as not processing
+      const entry = processRegistry.get(taskId)
+      if (entry) {
+        entry.isProcessing = false
+      }
+
       // If cancelled, reject with cancellation error
       if (cancelled || checkCancelled()) {
         if (!resolved) {
@@ -529,13 +599,24 @@ export async function sendMessage(
         }
         return
       }
-      if (!resolved && code !== 0 && code !== null) {
-        reject(new Error(`Process exited with code ${code}`))
+      if (!resolved) {
+        if (code !== 0 && code !== null) {
+          reject(new Error(`Process exited with code ${code}`))
+        } else {
+          // Process exited cleanly but no result message — resolve with whatever we have
+          resolved = true
+          if (currentResponse) {
+            resolve(currentResponse)
+          } else {
+            reject(new Error('Claude Code process exited without producing a response'))
+          }
+        }
       }
     })
 
     proc.on('error', (err) => {
-      clearTimeout(timeoutId)
+      clearTimeout(startupTimeoutId)
+      clearInactivityTimers()
       logger.error(`Claude Code process error:`, err)
       reject(err)
     })
@@ -667,6 +748,7 @@ Only include items that would genuinely be useful for future tasks. If nothing i
           '--print',
           '--output-format', 'stream-json',
           '--verbose',
+          '--model', 'haiku',
           analysisPrompt
         ], {
           cwd: extractionFolder,
