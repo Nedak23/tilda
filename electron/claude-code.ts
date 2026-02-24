@@ -380,8 +380,8 @@ export async function sendMessage(
       'Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch',
       'NotebookEdit', 'Task', 'TodoWrite',
       // Write/Edit scoped to working directory
-      `Edit(//${workingFolder}/**)`,
-      `Write(//${workingFolder}/**)`,
+      `Edit(//${workingFolder.replace(/^\//, '')}/**)`,
+      `Write(//${workingFolder.replace(/^\//, '')}/**)`,
       // Bash restricted to safe commands
       'Bash(cd *)', 'Bash(ls *)', 'Bash(cat *)', 'Bash(find *)',
       'Bash(mkdir *)', 'Bash(cp *)', 'Bash(mv *)', 'Bash(rm *)',
@@ -567,7 +567,8 @@ export async function sendMessage(
           logger.error('Failed to write to Claude Code stdin:', err)
           if (!resolved) {
             resolved = true
-            clearTimeout(timeoutId)
+            clearTimeout(startupTimeoutId)
+            clearInactivityTimers()
             reject(new Error(`Failed to send message to Claude Code: ${err.message}`))
           }
         }
