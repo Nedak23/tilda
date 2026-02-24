@@ -372,6 +372,12 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   sendMessage: async (taskId, content) => {
     const { pendingResponses } = get()
 
+    // Guard against concurrent sends while processing
+    if (pendingResponses.has(taskId)) {
+      logger.warn(`Ignoring sendMessage for task ${taskId} - already processing`)
+      return
+    }
+
     // Capture current pending attachments before sending
     const currentPendingAttachments = get().pendingAttachmentsByTask[taskId] || []
     const attachmentIds = currentPendingAttachments.map(a => a.id)

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Message, Attachment } from '../types'
 import { MarkdownContent } from './MarkdownContent'
+import { UserQuestionCard, parseQuestionBlock } from './UserQuestionCard'
 
 const MAX_CHARS_BEFORE_TRUNCATE = 500
 
@@ -74,18 +75,26 @@ interface ChatMessageProps {
   message: Message
   attachments?: Attachment[]
   isStreaming?: boolean
+  isAnswered?: boolean
+  nextMessageContent?: string
+  taskId?: string
   onRetry?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
   onCopy?: (content: string) => void
+  onSelectOption?: (option: string) => void
 }
 
 export function ChatMessage({
   message,
   attachments = [],
   isStreaming = false,
+  isAnswered = false,
+  nextMessageContent,
+  taskId,
   onRetry,
   onEdit,
-  onCopy
+  onCopy,
+  onSelectOption
 }: ChatMessageProps) {
   const isUser = message.sender === 'user'
   const [isExpanded, setIsExpanded] = useState(false)
@@ -236,6 +245,8 @@ export function ChatMessage({
   }
 
   // LLM message - no background, with hover action buttons
+  const questionData = !isStreaming ? parseQuestionBlock(message.content) : null
+
   return (
     <div
       className="flex justify-start animate-fade-in relative"
@@ -244,7 +255,27 @@ export function ChatMessage({
     >
       <div className="max-w-[80%] relative">
         <div className="text-sm text-text break-words">
-          <MarkdownContent content={message.content} />
+          {questionData ? (
+            <>
+              {questionData.beforeQuestion && (
+                <MarkdownContent content={questionData.beforeQuestion} />
+              )}
+              <UserQuestionCard
+                question={questionData.question}
+                options={questionData.options}
+                taskId={taskId || ''}
+                isAnswered={isAnswered}
+                selectedAnswer={nextMessageContent}
+                isStreaming={isStreaming}
+                onSelectOption={(option) => onSelectOption?.(option)}
+              />
+              {questionData.afterQuestion && (
+                <MarkdownContent content={questionData.afterQuestion} />
+              )}
+            </>
+          ) : (
+            <MarkdownContent content={message.content} />
+          )}
           {isStreaming && (
             <span className="inline-block w-1.5 h-4 bg-current ml-0.5 animate-pulse" />
           )}

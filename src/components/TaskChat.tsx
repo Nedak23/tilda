@@ -299,14 +299,22 @@ export function TaskChat({ task, onBack }: TaskChatProps) {
                 message.sender === 'agent' &&
                 index === messages.length - 1
 
+              // Determine if a question in this message has been answered
+              const nextMessage = index < messages.length - 1 ? messages[index + 1] : null
+              const isAnswered = message.sender === 'agent' && nextMessage?.sender === 'user'
+
               return (
                 <ChatMessage
                   key={message.id}
                   message={message}
                   attachments={getMessageAttachments(message)}
                   isStreaming={isPending && isLastAgentMessage}
+                  isAnswered={isAnswered}
+                  nextMessageContent={nextMessage?.sender === 'user' ? nextMessage.content : undefined}
+                  taskId={task.id}
                   onRetry={(id) => retryMessage(task.id, id)}
                   onEdit={(id, content) => editAndResendMessage(task.id, id, content)}
+                  onSelectOption={(option) => sendMessage(task.id, option)}
                 />
               )
             })}
