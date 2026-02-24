@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 
 // Default panel sizes as percentages
-export const DEFAULT_TILDA_SIZE = 40
+export const DEFAULT_TILDA_SIZE = 25
 export const DEFAULT_NAV_SIZE = 13
 
 interface LayoutState {
@@ -13,7 +13,7 @@ interface LayoutState {
 
 const STORAGE_KEY = 'tilda-layout-state'
 const DEFAULT_STATE: LayoutState = {
-  isTildaCollapsed: false,
+  isTildaCollapsed: true,
   isNavCollapsed: false,
   tildaSize: DEFAULT_TILDA_SIZE,
   navSize: DEFAULT_NAV_SIZE

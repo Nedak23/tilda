@@ -44,6 +44,16 @@ export interface Message {
   content: string
   timestamp: string
   attachmentIds?: string[]
+  chatId?: string
+}
+
+export interface Chat {
+  id: string
+  taskId: string
+  name: string
+  sortPosition: number
+  claudeSessionId?: string
+  createdAt: string
 }
 
 export interface Attachment {
@@ -103,10 +113,20 @@ export interface TasksAPI {
 
 export interface MessagesAPI {
   getByTask: (taskId: string) => Promise<Message[]>
-  create: (taskId: string, content: string, sender: MessageSender, attachmentIds?: string[]) => Promise<Message>
+  getByChat: (chatId: string) => Promise<Message[]>
+  create: (taskId: string, content: string, sender: MessageSender, attachmentIds?: string[], chatId?: string) => Promise<Message>
   delete: (id: string) => Promise<void>
   deleteFromId: (taskId: string, messageId: string) => Promise<void>
+  deleteFromChatId: (chatId: string, messageId: string) => Promise<void>
   update: (id: string, content: string) => Promise<void>
+}
+
+export interface ChatsAPI {
+  getByTask: (taskId: string) => Promise<Chat[]>
+  create: (taskId: string, name: string) => Promise<Chat>
+  updateName: (id: string, name: string) => Promise<void>
+  delete: (id: string) => Promise<void>
+  ensureDefault: (taskId: string) => Promise<Chat>
 }
 
 export interface AttachmentsAPI {
@@ -119,61 +139,22 @@ export interface AttachmentsAPI {
 export interface LLMAPI {
   sendMessage: (
     taskId: string,
+    chatId: string,
     userMessage: string,
     onChunk: (chunk: string) => void,
     attachmentIds?: string[]
   ) => Promise<string>
   regenerateResponse: (
     taskId: string,
+    chatId: string,
     onChunk: (chunk: string) => void
   ) => Promise<string>
-  cancelRequest: (taskId: string) => void
+  cancelRequest: (chatId: string) => void
 }
 
 export interface SettingsAPI {
   get: () => Promise<Settings>
   save: (settings: Settings) => Promise<void>
-}
-
-export interface TildaMessage {
-  id: string
-  sender: MessageSender
-  content: string
-  timestamp: string
-  attachmentIds?: string[]
-}
-
-export interface TildaAttachment {
-  id: string
-  filename: string
-  content: string
-  mimeType: string
-  createdAt: string
-  relativePath?: string
-}
-
-export interface TildaAttachmentsAPI {
-  getAll: () => Promise<TildaAttachment[]>
-  getPending: () => Promise<TildaAttachment[]>
-  create: (filename: string, content: string, mimeType: string, relativePath?: string) => Promise<TildaAttachment>
-  delete: (id: string) => Promise<void>
-  clear: () => Promise<void>
-}
-
-export interface TildaAPI {
-  getMessages: () => Promise<TildaMessage[]>
-  sendMessage: (
-    userMessage: string,
-    onChunk: (chunk: string) => void
-  ) => Promise<string>
-  regenerateResponse: (
-    onChunk: (chunk: string) => void
-  ) => Promise<string>
-  cancelRequest: () => void
-  clearHistory: () => Promise<void>
-  deleteMessage: (id: string) => Promise<void>
-  deleteMessagesFromId: (messageId: string) => Promise<void>
-  updateMessage: (id: string, content: string) => Promise<void>
 }
 
 // Context types
@@ -307,18 +288,26 @@ export interface FeedbackAPI {
   send: (input: FeedbackInput) => Promise<{ success: boolean; error?: string }>
 }
 
+export interface WorkingFolderEntry {
+  name: string
+  relativePath: string
+  isDirectory: boolean
+  size?: number
+  mimeType?: string
+}
+
 export interface ShellAPI {
   openWorkingFolder: (taskId: string) => Promise<void>
+  listWorkingFolder: (taskId: string) => Promise<WorkingFolderEntry[]>
 }
 
 export interface ElectronAPI {
   tasks: TasksAPI
   messages: MessagesAPI
+  chats: ChatsAPI
   attachments: AttachmentsAPI
   llm: LLMAPI
   settings: SettingsAPI
-  tilda: TildaAPI
-  tildaAttachments: TildaAttachmentsAPI
   contexts: ContextsAPI
   contextDocuments: ContextDocumentsAPI
   aiNotes: AINotesAPI
